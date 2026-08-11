@@ -108,7 +108,7 @@ dependencies (`minigrid`, `gymnasium`).
 - **Upstream:** <https://github.com/PennyLaneAI/pennylane>
 
 Runtime dependency, used for the variational-quantum-circuit paths
-(`qkanvfwp`, `vqc_components.py`, and the `qml` solver). The layer idiom in `vqc_components.py`
+(GQKAN-QFWP, `vqc_components.py`, and the `qml` solver). The layer idiom in `vqc_components.py`
 (`H_layer` / `RX_layer` / `RY_layer` / `RZ_layer` / `entangling_layer`) follows the standard PennyLane
 tutorial pattern.
 

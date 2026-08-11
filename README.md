@@ -34,7 +34,7 @@ programmer's parameters are a *per-sample input*, not a shared trainable weight.
 | Directory | Task | Models | Data |
 |---|---|---|---|
 | [`RL_minigrid/`](RL_minigrid/) | A3C reinforcement learning on `MiniGrid-Empty-16x16-v0` | all four | procedural (MiniGrid) |
-| [`Solar_cycle_forecasting/`](Solar_cycle_forecasting/) | Solar-cycle (sunspot) forecasting, 528 → 132 months | `qqkanfwp` | SILSO monthly sunspot number |
+| [`Solar_cycle_forecasting/`](Solar_cycle_forecasting/) | Solar-cycle (sunspot) forecasting, 528 → 132 months | GQKAN-QKANFWP | SILSO monthly sunspot number |
 | [`times_series_benchmark/`](times_series_benchmark/) | 7 forecasting tasks — 5 analytic signals + 2 quantum-dynamics traces | all four | generated at runtime / shipped CSVs |
 
 Each directory has its own README with the exact commands, hyperparameters, and outputs.
