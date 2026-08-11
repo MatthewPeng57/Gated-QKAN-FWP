@@ -135,36 +135,6 @@ that never materialises the big delta tensor — trading the scan's parallelism 
 The two compute the same quantity: `off` sums `Σ_t (1−g_t)·δ_t·Π_{s>t} g_s`, `on` runs the equivalent
 recurrence. Measured agreement at `L=528` in fp32 is ~1e-7 relative, forward and backward.
 
-## Does it actually learn? (pipeline sanity check)
-
-These are **not** the paper's results — they are single-seed checks that each pipeline trains, so you
-can tell quickly whether your environment is working. Measured on an RTX 5090 / 32-core CPU.
-
-| Task | Model | Budget | Metric | Start → end |
-|---|---|---|---|---|
-| Solar | GQKAN-QKANFWP | 100 epochs | train loss | 0.2360 → **0.0205** |
-| | | | val loss | 0.0757 → **0.0233** |
-| times_series (`bessel_j2`) | GQKAN-QKANFWP | 100 epochs | train loss | 0.0458 → **5.3e-06** |
-| | GQKANFWP | 100 epochs | train loss | 0.2763 → **0.0059** |
-| | GQKAN-FWP | 100 epochs | train loss | 0.0779 → **2.7e-05** |
-| | GQKAN-QFWP | 11 epochs¹ | train loss | 0.0322 → **0.0082** |
-| RL (`MiniGrid-Empty-16x16`) | GQKAN-QKANFWP | 600 episodes | mean reward | 0.065 → **0.599** |
-| | | | goal-reached rate | 16% → **86%** |
-
-¹ at `--window_len 16` to keep the check short. The other times_series rows use the benchmark
-configuration from `run_all_dataset.sh` (not `train.py`'s lighter argparse defaults); the Solar row
-uses `run.sh`'s configuration.
-
-**GQKAN-QFWP is the slowest model** — its variational circuit is a PennyLane `default.qubit`
-state-vector simulation evaluated one sample at a time. Measured on 32 CPU cores: **~36 s/epoch** at
-`--window_len 64` (so ~1 hour for the 100-epoch default), and ~28 s/epoch at `--window_len 16`. Cost
-scales with the sequence length, since the circuit is evaluated once per timestep per sample.
-
-**Run these tasks one at a time.** They are CPU-bound and heavily threaded (GQKAN-QFWP alone uses
-~1300% CPU). Running several concurrently oversubscribes the machine badly — we measured load average
-87 on 32 cores doing exactly that, which inflated the apparent per-epoch cost by more than an order of
-magnitude.
-
 ## Repository layout
 
 ```
