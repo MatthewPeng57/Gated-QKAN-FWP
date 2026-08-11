@@ -1,0 +1,51 @@
+# Single conda environment for ALL THREE tasks in this repository:
+#   RL_minigrid/  ·  Solar_cycle_forecasting/  ·  times_series_benchmark/
+#
+# Versions are pinned to the environment these pipelines were verified on
+# (Linux x86_64, NVIDIA RTX 5090 / sm_120, CUDA 12.8, driver 580.126.20).
+#
+#   conda env create -f environment.yml
+#   conda activate gated-qkanfwps
+#
+# GPU is required only by parts of the code:
+#   - Solar_cycle_forecasting defaults to --device cuda and to the Triton "flash"
+#     solver. Pass --device cpu and --fast_solver cutile to run without a GPU.
+#   - times_series_benchmark and RL_minigrid run on CPU.
+#   - The optional block at the bottom is needed ONLY to REGENERATE the quantum
+#     dynamics CSVs in times_series_benchmark/cuda_q_data/ (make_cudaq_data.py).
+#     The shipped CSVs let you train those datasets without it.
+name: gated-qkanfwps
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11.10
+  - pip
+  - pip:
+      # --- core numerics ---------------------------------------------------
+      - torch==2.9.1               # BSD-3-Clause
+      - numpy==2.2.6               # BSD-3-Clause
+      - pandas==3.0.1              # BSD-3-Clause
+      - scipy==1.16.3              # BSD-3-Clause
+      - scikit-learn==1.8.0        # BSD-3-Clause
+      - matplotlib==3.10.8         # Matplotlib (PSF-based)
+      - tqdm==4.67.1               # MPL-2.0 / MIT
+
+      # --- quantum / KAN stack ---------------------------------------------
+      - qkan==0.2.1                # Apache-2.0 - external QKAN package (J-C. Jiang)
+      - pennylane==0.43.1          # Apache-2.0
+      - pennylane-lightning==0.43.0
+      - triton==3.5.1              # MIT - fused flash kernels, GPU only
+
+      # --- reinforcement learning (RL_minigrid) ----------------------------
+      - gymnasium==1.2.3           # MIT
+      - minigrid==3.0.0            # MIT
+      - pygame==2.6.1              # LGPL-2.1 - minigrid rendering backend
+
+      # --- optional: faster tensor-network contraction ---------------------
+      - opt-einsum==3.4.0          # MIT - guarded import; CPU fallback path
+
+      # --- optional: ONLY for regenerating cuda_q_data/*.csv ----------------
+      # Requires an NVIDIA GPU. Uncomment to enable make_cudaq_data.py.
+      # - cudaq==0.14.0            # Apache-2.0 (pulls cuquantum)
+      # - cupy-cuda12x==13.6.0     # MIT

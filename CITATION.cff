@@ -1,0 +1,36 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "Gated-QKANFWPs: Quantum-inspired KAN fast-weight programmers across RL, solar-cycle forecasting, and time-series benchmarks"
+abstract: >-
+  Reference implementations and training pipelines for four quantum-inspired
+  Kolmogorov-Arnold Network fast-weight programmers (qqkanfwp, lqkanfwp,
+  qkanlfwp, qkanvfwp), evaluated on three tasks: A3C reinforcement learning in
+  MiniGrid, SILSO solar-cycle (sunspot) forecasting, and a quantum-dynamics
+  time-series benchmark suite.
+type: software
+license: Apache-2.0
+repository-code: "https://github.com/MatthewPeng57/Gated-QKANFWPs"
+keywords:
+  - Kolmogorov-Arnold Networks
+  - fast weight programmers
+  - quantum machine learning
+  - time series forecasting
+  - reinforcement learning
+
+# TODO(before release): complete the author list — add co-authors, ORCIDs and
+# affiliations, then delete this comment.
+authors:
+  - family-names: Peng
+    given-names: Matthew
+
+# TODO(before release): if this software accompanies a published paper, fill in
+# the block below (or delete it) so `preferred-citation` points at the paper.
+# preferred-citation:
+#   type: article
+#   title: ""
+#   authors:
+#     - family-names: ""
+#       given-names: ""
+#   year: 2026
+#   journal: ""
+#   doi: ""

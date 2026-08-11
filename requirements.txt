@@ -1,0 +1,33 @@
+# pip alternative to environment.yml — one set of dependencies for all three tasks.
+# Requires Python 3.11.  Verified on Linux x86_64 / NVIDIA RTX 5090 (sm_120, CUDA 12.8).
+#
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+
+# --- core numerics ---
+torch==2.9.1
+numpy==2.2.6
+pandas==3.0.1
+scipy==1.16.3
+scikit-learn==1.8.0
+matplotlib==3.10.8
+tqdm==4.67.1
+
+# --- quantum / KAN stack ---
+qkan==0.2.1
+pennylane==0.43.1
+pennylane-lightning==0.43.0
+triton==3.5.1
+
+# --- reinforcement learning (RL_minigrid) ---
+gymnasium==1.2.3
+minigrid==3.0.0
+pygame==2.6.1
+
+# --- optional: faster tensor-network contraction (guarded import) ---
+opt-einsum==3.4.0
+
+# --- optional: ONLY to regenerate times_series_benchmark/cuda_q_data/*.csv ---
+# Needs an NVIDIA GPU. The shipped CSVs make this unnecessary for training.
+# cudaq==0.14.0
+# cupy-cuda12x==13.6.0
