@@ -17,7 +17,7 @@
 #
 # Original: https://github.com/Jim137/qkan (Apache-2.0),
 #           Copyright (c) Jiun-Cheng Jiang.
-# Modifications: Copyright 2026 Matthew Peng and contributors,
+# Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
 # Summary of changes made to the upstream file:
@@ -66,6 +66,7 @@ from qkan.info import get_dist_info, print0, print_version
 # )
 from .fast_solver import (
     _FLASH_AVAILABLE,
+    cute_batched_solver,
     cutile_batched_solver,
     cutn_solver,
     flash_exact_solver,
@@ -153,6 +154,7 @@ class QKANLayer(nn.Module):
                 "cutn",
                 "tn",
                 "cutile",
+                "cute",
                 "cudaq",
             ],
             Callable,
@@ -198,6 +200,7 @@ class QKANLayer(nn.Module):
                 "cutn",
                 "tn",
                 "cutile",
+                "cute",
                 "cudaq",
             ],
             Callable,
@@ -479,6 +482,21 @@ class QKANLayer(nn.Module):
                 out_dim=self.out_dim,
                 dtype=self.c_dtype,
             ).to(self.p_dtype)
+        elif self.solver == "cute":
+            postacts = cute_batched_solver(
+                x,
+                th,
+                self.preacts_weight,
+                self.preacts_bias,
+                self.reps,
+                device=self.device,
+                ansatz=self.ansatz,
+                group=self.group,
+                preacts_trainable=self.preact_trainable,
+                fast_measure=self.fast_measure,
+                out_dim=self.out_dim,
+                dtype=self.c_dtype,
+            ).to(self.p_dtype)
         elif self.solver == "qiskit":
             # Real-device path. fast_measure is forced False inside
             # qiskit_solver — shots return Born-rule probabilities.
@@ -677,6 +695,21 @@ class QKANLayer(nn.Module):
                 out_dim=self.out_dim,
                 dtype=self.c_dtype,
             ).to(self.p_dtype)
+        elif self.solver == "cute":
+            postacts = cute_batched_solver(
+                x,
+                th,
+                self.preacts_weight,
+                self.preacts_bias,
+                self.reps,
+                device=self.device,
+                ansatz=self.ansatz,
+                group=self.group,
+                preacts_trainable=self.preact_trainable,
+                fast_measure=self.fast_measure,
+                out_dim=self.out_dim,
+                dtype=self.c_dtype,
+            ).to(self.p_dtype)
         elif self.solver == "qiskit":
             # Real-device path; requires the optional qiskit backend.
             if not _FAST_QISKIT_AVAILABLE:
@@ -848,6 +881,7 @@ class QKAN(nn.Module):
                 "cutn",
                 "tn",
                 "cutile",
+                "cute",
             ],
             Callable,
         ] = "exact",
@@ -937,6 +971,7 @@ class QKAN(nn.Module):
                 "cutn",
                 "tn",
                 "cutile",
+                "cute",
             ],
             Callable,
         ] = solver

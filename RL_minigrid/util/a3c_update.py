@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,9 @@
 
 """Shared A3C update step for the fast-weight-programmer policies.
 
-This module consolidates the previously duplicated ``push_and_pull``
-implementations from ``utils_qqkan.py``, ``utils_classical_fwp.py`` and
-``utils_quantum_fwp.py``. Those three copies were identical apart from how many
-fast-state tensors they forwarded to ``lnet.forward_action(...)``; that single
-difference is now expressed through the ``fast_state`` tuple.
+All four models share one update step. They differ only in how many fast-weight
+tensors they carry between timesteps, which is expressed through the
+``fast_state`` tuple rather than through separate copies of this function.
 """
 
 import numpy as np
@@ -34,9 +32,9 @@ def push_and_pull(opt, lnet, gnet, done, s_, fast_state, bs, ba, br, gamma):
 
     fast_state: model-specific tuple of fast-weight tensors, forwarded as
         ``lnet.forward_action(state, *fast_state)``:
-          qqkanfwp / lqkanfwp -> (theta, base_weight)
-          qkanlfwp            -> (fast_weight, fast_bias)
-          qkanvfwp            -> (fast_params,)
+          GQKAN-QKANFWP / GQKANFWP -> (theta, base_weight)
+          GQKAN-FWP                -> (fast_weight, fast_bias)
+          GQKAN-QFWP               -> (fast_params,)
     """
     if done:
         v_s_ = 0.               # terminal

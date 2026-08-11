@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,10 +41,10 @@ def build_result_path(args, experiment_root: Path):
 	run_name = f"RUN_{timestamp}"
 
 	MODEL_EXTRA_PARAMS = {
-		"qqkanfwp": [],
-		"lqkanfwp": [],
-		"qkanlfwp": [],
-		"qkanvfwp": [],
+		"gqkan_qkanfwp": [],   # GQKAN-QKANFWP
+		"gqkanfwp": [],        # GQKANFWP
+		"gqkan_fwp": [],       # GQKAN-FWP
+		"gqkan_qfwp": [],      # GQKAN-QFWP
 	}
 
 	if args.model not in MODEL_EXTRA_PARAMS:

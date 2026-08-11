@@ -9,6 +9,21 @@ notice that it was changed, per Apache-2.0 §4(b).
 
 ---
 
+## 0. Provenance of the training pipeline
+
+The training pipeline, experiment scaffolding, trainer utilities and dataset generators in this
+repository are **adapted from a private research repository authored by Samuel Yen-Chi Chen**, used
+with permission. He is a co-author of the accompanying paper and is named in the copyright notice of
+this repository (see `LICENSE` and `NOTICE`). The affected code includes, in each task folder,
+`src/trainers/`, `src/utils/experiment.py`, the dataset modules under `src/datasets/`, and the model
+scaffolding that the four gated QKAN-FWP variants are built on.
+
+Note also that **Jiun-Cheng Jiang, the author of QKAN (§1), is a co-author of the same paper**. The
+QKAN code is nonetheless treated here as third-party software and carries its own upstream Apache-2.0
+headers and modification notices, exactly as it would from any outside project.
+
+---
+
 ## 1. QKAN — Apache-2.0 *(vendored and modified)*
 
 - **Upstream:** <https://github.com/Jim137/qkan>

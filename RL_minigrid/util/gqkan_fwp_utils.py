@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Actor-critic policy wrapper around the QKAN-linear fast-weight programmer.
+"""Actor-critic policy wrapper around the GQKAN-FWP fast-weight programmer.
 
-Exposes ``QuantumFWPNet``, the network used by ``run_qkanlfwp.py``. The fast
+Exposes ``QuantumFWPNet``, the network used by ``run_gqkan_fwp.py``. The fast
 weights are carried between steps by the caller as ``(fast_weight, fast_bias)``.
 """
 
@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from gated_qkanlFWP import FWP
+from gqkan_fwp import FWP
 
 
 class QuantumFWPNet(nn.Module):

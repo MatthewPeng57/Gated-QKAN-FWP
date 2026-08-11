@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,14 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Stage-0 extraction gate: reproduce the executed split + tensor shapes.
+"""Data gate: reproduce the published split, scaling and tensor shapes.
 
 CPU / data-only — no model instantiation, no CUDA, no GPU required.
 
-Verifies the clean extraction reproduces the executed ``qqkanfwp`` Task-A
-sunspot pipeline exactly:
+Verifies that the shipped data pipeline reproduces exactly the inputs the
+published GQKAN-QKANFWP checkpoints were trained on:
 
-  * shipped CSV integrity (sha256 == executed FWP_tele CSV),
+  * shipped CSV integrity (sha256 of data/Sunspots.csv),
   * N = 2606 windows, split (train, val, test) = (2084, 260, 262),
   * x shape (528, 1), y shape (132,), dtype float32, no NaNs,
   * min-max scaler maps the full series to [0, 1],
@@ -42,7 +42,7 @@ sys.path.insert(0, str(_REPO_ROOT))
 
 from src.data.sunspot import DEFAULT_CSV, make_sunspot_split  # noqa: E402
 
-# Expected values, derived from the executed Task-A protocol: L=528 -> H=132
+# Expected values, derived from the published protocol: L=528 -> H=132
 # sliding windows over the shipped SILSO monthly-mean CSV, full-series min-max
 # scaling, and a window-level chronological 80/10/10 split.
 EXPECTED_CSV_SHA256 = "15c3d116ad6c5a5427837ae4cec39aa9b4b2e4a0d8e374d501a4ac760fc50b35"

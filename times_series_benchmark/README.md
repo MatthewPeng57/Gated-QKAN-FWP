@@ -1,16 +1,23 @@
-# times_series_benchmark — QKAN-FWP time-series suite
+# times_series_benchmark — GQKAN-FWP time-series suite
 
 All four quantum-inspired KAN fast-weight programmers on seven time-series forecasting tasks: five
 analytic signals generated on the fly, and two quantum-dynamics traces shipped as CSVs.
 
 ## Models
 
-| `--model` | Slow programmer | Fast programmer |
-|---|---|---|
-| `qqkanfwp` | QKAN | QKAN |
-| `lqkanfwp` | Linear | QKAN |
-| `qkanlfwp` | QKAN | Linear |
-| `qkanvfwp` | QKAN | VQC (PennyLane) |
+Names follow the paper, *Gated QKAN-FWP: Scalable Quantum-inspired Sequence Learning*
+([arXiv:2605.06734](https://arxiv.org/abs/2605.06734)).
+
+| `--model` | Paper name | Slow programmer | Fast programmer |
+|---|---|---|---|
+| `gqkan_qkanfwp` | GQKAN-QKANFWP | QKAN | QKAN |
+| `gqkanfwp` | GQKANFWP | Linear | QKAN |
+| `gqkan_fwp` | GQKAN-FWP | QKAN | Linear |
+| `gqkan_qfwp` | GQKAN-QFWP | QKAN | VQC (PennyLane) |
+
+> **Note:** `gqkanfwp` (GQKANFWP) and `gqkan_fwp` (GQKAN-FWP) are different models and differ by a
+> single underscore. `gqkanfwp` has a **Linear** slow programmer and a QKAN fast programmer;
+> `gqkan_fwp` is the reverse — a **QKAN** slow programmer and a Linear fast programmer.
 
 ## Datasets
 
@@ -35,19 +42,27 @@ to train** — it is needed only to regenerate them. See [`cuda_q_data/README.md
 cd times_series_benchmark
 
 # one model, one dataset
-PYTHONPATH=. python train.py --model qqkanfwp --dataset bessel_j2 --epochs 100
+PYTHONPATH=. python train.py --model gqkan_qkanfwp --dataset bessel_j2 --epochs 100
 
 # the full sweep: 4 models x 3 seeds on jaynes_cummings
 bash run_all_dataset.sh
 ```
 
-Everything here runs on CPU (`--device cpu` is what the sweep uses). `qkanvfwp` is much the slowest —
-its variational circuit is a PennyLane state-vector simulation.
+Everything here runs on CPU (`--device cpu` is what the sweep uses). `gqkan_qfwp` (GQKAN-QFWP) is
+much the slowest — its variational circuit is a PennyLane state-vector simulation.
 
-## Defaults
+## Settings
 
-`--epochs 100 --lr 1e-3 --batch_size 4 --window_len 64 --input_size 1 --hidden_size 8 --qnn_depth 2
---seed 0`, matching `run_all_dataset.sh` (which sweeps seeds 0–2).
+The benchmark configuration is the one `run_all_dataset.sh` passes explicitly:
+
+```
+--epochs 100 --lr 1e-3 --batch_size 4 --window_len 64 --input_size 1 --hidden_size 8
+--qnn_depth 2 --device cpu     # sweeping seeds 0, 1, 2
+```
+
+These are **not** `train.py`'s built-in argparse defaults, which are lighter (`--epochs 30
+--batch_size 2 --window_len 4 --hidden_size 5 --qnn_depth 5 --seed 42`). Pass the flags above — or
+use the sweep script — to reproduce the paper configuration.
 
 ### ⚠️ Three flags do not do what their names suggest
 
@@ -56,9 +71,9 @@ because changing them would change published results.
 
 | Flag | Model | Actual behaviour |
 |---|---|---|
-| `--hidden_size` | `qkanlfwp` | **Ignored.** `QKANLFWP.py` sets `hidden_size = 4` unconditionally. |
-| `--hidden_size` | `lqkanfwp` | **Off by one.** `LQKANFWP.py` uses `hidden_size - 1`. |
-| `--qnn_depth` | `qqkanfwp`, `lqkanfwp`, `qkanlfwp` | **No-op.** Only `qkanvfwp` consumes it (as its VQC circuit depth). |
+| `--hidden_size` | `gqkan_fwp` (GQKAN-FWP) | **Ignored.** `gqkan_fwp.py` overwrites the argument with `hidden_size = 4` unconditionally. |
+| `--hidden_size` | `gqkanfwp` (GQKANFWP) | **Off by one.** `gqkanfwp.py` uses `hidden_size - 1`, so `--hidden_size 8` builds a width-7 encoder. |
+| `--qnn_depth` | `gqkan_qkanfwp`, `gqkanfwp`, `gqkan_fwp` | **No-op.** Only `gqkan_qfwp` (GQKAN-QFWP) consumes it, as its VQC circuit depth. `gqkan_qkanfwp` accepts the value as its `vqc_depth` argument but never reads it; the other two are not passed it at all. |
 
 ## Outputs
 

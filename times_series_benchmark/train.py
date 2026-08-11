@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,14 +27,18 @@ from pathlib import Path
 import sys
 
 
-from src.models.QKANVFWP import FWP as QKAN_VFWP
-from src.models.QKANVFWP import FWPCell as QKAN_VFWPCell
-from src.models.QQKANFWP import FWP as QKAN_QKANFWP
-from src.models.QQKANFWP import FWPCell as QKAN_QKANFWPCell
-from src.models.LQKANFWP import FWP as Linear_QKANFWP
-from src.models.LQKANFWP import FWPCell as Linear_QKANFWPCell
-from src.models.QKANLFWP import FWP as QKAN_LinearFWP
-from src.models.QKANLFWP import FWPCell as QKAN_LinearFWPCell
+# GQKAN-QFWP: QKAN slow programmer, VQC (PennyLane) fast programmer
+from src.models.gqkan_qfwp import FWP as GQKAN_QFWP
+from src.models.gqkan_qfwp import FWPCell as GQKAN_QFWPCell
+# GQKAN-QKANFWP: QKAN slow programmer, QKAN fast programmer
+from src.models.gqkan_qkanfwp import FWP as GQKAN_QKANFWP
+from src.models.gqkan_qkanfwp import FWPCell as GQKAN_QKANFWPCell
+# GQKANFWP: Linear slow programmer, QKAN fast programmer
+from src.models.gqkanfwp import FWP as GQKANFWP
+from src.models.gqkanfwp import FWPCell as GQKANFWPCell
+# GQKAN-FWP: QKAN slow programmer, Linear fast programmer
+from src.models.gqkan_fwp import FWP as GQKAN_FWP
+from src.models.gqkan_fwp import FWPCell as GQKAN_FWPCell
 
 from src.utils.experiment import save_args_json
 from src.utils.experiment import save_git_revision
@@ -46,24 +50,23 @@ from src.utils.experiment import Tee
 
 def make_model(args):
 	"""
-	Create model based on args.model.
-	Move your existing model-creation if/elif here.
+	Create the model selected by args.model.
 	"""
-	if args.model == "qkanvfwp":
-		fwp_cell = QKAN_VFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
-		model = QKAN_VFWP(fwp_cell).to(args.device).float()
+	if args.model == "gqkan_qfwp":            # GQKAN-QFWP
+		fwp_cell = GQKAN_QFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
+		model = GQKAN_QFWP(fwp_cell).to(args.device).float()
 		return model
-	elif args.model == "qqkanfwp":
-		fwp_cell = QKAN_QKANFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
-		model = QKAN_QKANFWP(fwp_cell, args.device).to(args.device).float()
+	elif args.model == "gqkan_qkanfwp":       # GQKAN-QKANFWP
+		fwp_cell = GQKAN_QKANFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
+		model = GQKAN_QKANFWP(fwp_cell, args.device).to(args.device).float()
 		return model
-	elif args.model == "lqkanfwp":
-		fwp_cell = Linear_QKANFWPCell(args.input_size, args.hidden_size, args.output_size).to(args.device).float()
-		model = Linear_QKANFWP(fwp_cell, args.device).to(args.device).float()
+	elif args.model == "gqkanfwp":            # GQKANFWP
+		fwp_cell = GQKANFWPCell(args.input_size, args.hidden_size, args.output_size).to(args.device).float()
+		model = GQKANFWP(fwp_cell, args.device).to(args.device).float()
 		return model
-	elif args.model == "qkanlfwp":
-		fwp_cell = QKAN_LinearFWPCell(args.input_size, args.hidden_size, args.output_size).to(args.device).float()
-		model = QKAN_LinearFWP(fwp_cell, args.device).to(args.device).float()
+	elif args.model == "gqkan_fwp":           # GQKAN-FWP
+		fwp_cell = GQKAN_FWPCell(args.input_size, args.hidden_size, args.output_size).to(args.device).float()
+		model = GQKAN_FWP(fwp_cell, args.device).to(args.device).float()
 		return model
 	else:
 		raise ValueError(f"Unknown model: {args.model}")
@@ -84,9 +87,9 @@ def main():
 	parser.add_argument(
 		"--model",
 		type=str,
-		choices=["qqkanfwp", "lqkanfwp", "qkanlfwp", "qkanvfwp"],
-		default="qqkanfwp",
-		help="choose model (default: qqkanfwp)"
+		choices=["gqkan_qkanfwp", "gqkanfwp", "gqkan_fwp", "gqkan_qfwp"],
+		default="gqkan_qkanfwp",
+		help="choose model (default: gqkan_qkanfwp, i.e. GQKAN-QKANFWP)"
 	)
 
 

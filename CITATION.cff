@@ -1,12 +1,12 @@
 cff-version: 1.2.0
-message: "If you use this software, please cite it as below."
-title: "Gated-QKANFWPs: Quantum-inspired KAN fast-weight programmers across RL, solar-cycle forecasting, and time-series benchmarks"
+message: "If you use this software, please cite the paper below."
+title: "Gated-QKANFWPs: reference implementations for Gated QKAN-FWP"
 abstract: >-
-  Reference implementations and training pipelines for four quantum-inspired
-  Kolmogorov-Arnold Network fast-weight programmers (qqkanfwp, lqkanfwp,
-  qkanlfwp, qkanvfwp), evaluated on three tasks: A3C reinforcement learning in
-  MiniGrid, SILSO solar-cycle (sunspot) forecasting, and a quantum-dynamics
-  time-series benchmark suite.
+  Reference implementations and training pipelines for the gated QKAN-FWP family
+  of quantum-inspired Kolmogorov-Arnold Network fast-weight programmers
+  (GQKAN-QKANFWP, GQKANFWP, GQKAN-FWP, GQKAN-QFWP), evaluated on three tasks:
+  A3C reinforcement learning in MiniGrid, SILSO solar-cycle (sunspot)
+  forecasting, and a quantum-dynamics time-series benchmark suite.
 type: software
 license: Apache-2.0
 repository-code: "https://github.com/MatthewPeng57/Gated-QKANFWPs"
@@ -14,23 +14,58 @@ keywords:
   - Kolmogorov-Arnold Networks
   - fast weight programmers
   - quantum machine learning
+  - data re-uploading
   - time series forecasting
   - reinforcement learning
 
-# TODO(before release): complete the author list — add co-authors, ORCIDs and
-# affiliations, then delete this comment.
 authors:
   - family-names: Peng
-    given-names: Matthew
+    given-names: Kuo-Chung
+  - family-names: Chen
+    given-names: Samuel Yen-Chi
 
-# TODO(before release): if this software accompanies a published paper, fill in
-# the block below (or delete it) so `preferred-citation` points at the paper.
-# preferred-citation:
-#   type: article
-#   title: ""
-#   authors:
-#     - family-names: ""
-#       given-names: ""
-#   year: 2026
-#   journal: ""
-#   doi: ""
+preferred-citation:
+  type: article
+  title: "Gated QKAN-FWP: Scalable Quantum-inspired Sequence Learning"
+  year: 2026
+  journal: "arXiv preprint arXiv:2605.06734"
+  url: "https://arxiv.org/abs/2605.06734"
+  authors:
+    - family-names: Peng
+      given-names: Kuo-Chung
+    - family-names: Chen
+      given-names: Samuel Yen-Chi
+    - family-names: Jiang
+      given-names: Jiun-Cheng
+    - family-names: Liu
+      given-names: Chen-Yu
+    - family-names: Kuo
+      given-names: En-Jui
+    - family-names: Wang
+      given-names: Yun-Yuan
+    - family-names: Tiwari
+      given-names: Prayag
+    - family-names: Ceschini
+      given-names: Andrea
+    - family-names: Chen
+      given-names: Chi-Sheng
+    - family-names: Hsu
+      given-names: Yu-Chao
+    - family-names: Lin
+      given-names: Chun-Hua
+    - family-names: Li
+      given-names: Tai-Yue
+    - family-names: Rosato
+      given-names: Antonello
+    - family-names: Panella
+      given-names: Massimo
+    - family-names: See
+      given-names: Simon
+    - family-names: Al-Kuwari
+      given-names: Saif
+    - family-names: Chen
+      given-names: Kuan-Cheng
+    - family-names: Chen
+      given-names: Nan-Yow
+    - family-names: Goan
+      given-names: Hsi-Sheng

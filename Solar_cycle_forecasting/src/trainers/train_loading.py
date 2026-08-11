@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -125,7 +125,7 @@ def _extract_model_output(args, out):
 	"""
 	Normalize model forward outputs into a tensor aligned with y.
 	"""
-	if args.model == "qqkanfwp":
+	if args.model == "gqkan_qkanfwp":
 		# FWP returns a per-timestep stack; the last entry is the (B, H) forecast.
 		return out[-1]
 	else:
@@ -453,7 +453,7 @@ def run_training(
 	mae_scaled = float(np.mean(np.abs(pred_scaled_arr - true_scaled_arr)))
 	mse_scaled = float(np.mean((pred_scaled_arr - true_scaled_arr)**2))
 	rmse_scaled = float(np.sqrt(mse_scaled))
-	# R^2 on scaled data — required for the Task A baseline comparison.
+	# R^2 on scaled data — the headline comparison metric.
 	ss_res_scaled = float(np.sum((true_scaled_arr - pred_scaled_arr) ** 2))
 	ss_tot_scaled = float(np.sum((true_scaled_arr - np.mean(true_scaled_arr)) ** 2))
 	r2_scaled = 1.0 - ss_res_scaled / ss_tot_scaled if ss_tot_scaled > 0.0 else float('nan')

@@ -4,8 +4,11 @@ Long-horizon forecasting of the SILSO monthly mean total sunspot number: given *
 history (≈ 4.5 solar cycles), predict the **next 132 months** (11 years, ≈ one full cycle) in a single
 shot.
 
-The model is **`qqkanfwp`** (GQKAN-QKANFWP): a QKAN slow programmer reads the input window and emits
-the parameters of a QKAN fast programmer, which produces the forecast. **12,474 trainable parameters.**
+The model is **GQKAN-QKANFWP** (CLI key `gqkan_qkanfwp`): a QKAN slow programmer reads the input window
+and emits the parameters of a QKAN fast programmer, which produces the forecast. **12,474 trainable
+parameters.**
+
+> Gated QKAN-FWP: Scalable Quantum-inspired Sequence Learning — [arXiv:2605.06734](https://arxiv.org/abs/2605.06734)
 
 ## Run
 
@@ -20,7 +23,7 @@ or a single run directly:
 ```bash
 PYTHONPATH=. python train.py \
     --epochs 100 --lr 2.5e-3 --lr_schedule keras_decay --loss peak_aware_mse \
-    --model qqkanfwp --dataset sunspots --exp_name my_run --save_dir results \
+    --model gqkan_qkanfwp --dataset sunspots --exp_name my_run --save_dir results \
     --window_len 528 --horizon 132 --input_size 1 --output_size 132 \
     --hidden_size 48 --batch_size 32 --seed 0 --device cuda --alpha 1.0 --qnn_depth 2 \
     --in_resize 10 --out_resize 20 --qkan_s_dim_1 25 --qkan_s_dim_2 25 \
@@ -60,7 +63,7 @@ PYTHONPATH=. python tests/test_stage0_data_gate.py    # -> STAGE-0 DATA GATE: PA
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--fast_solver {flash,cutile}` | `flash` | Backend for the fast QKAN layer. `flash` uses fused Triton kernels (GPU); `cutile` is the pure-PyTorch scalar recurrence and runs on CPU. |
+| `--fast_solver {flash,cutile,cute}` | `flash` | Backend for the fast QKAN layer. `flash` uses fused Triton kernels (GPU); `cutile` is the pure-PyTorch scalar recurrence and runs on CPU; `cute` is an opt-in JIT-compiled CUDA/CuTe kernel (see below). |
 | `--streaming_fwp {off,on}` | `off` | `on` replaces the materialise-and-cumsum block with a left-to-right prefix-scan recurrence that never materialises the `(B, L, O, I, R+1, 2)` delta tensor — same result, less memory. |
 
 The two `--streaming_fwp` paths compute the same quantity: `off` sums
@@ -70,13 +73,67 @@ forward pass and the gradients — pure floating-point accumulation drift.
 
 To run without a GPU: `--device cpu --fast_solver cutile`.
 
+### The CuTe backend (opt-in)
+
+`--fast_solver cute` uses a hand-written CUDA kernel (`src/models/utils/csrc/cute_batched_kernels.cu`,
+built on NVIDIA CuTe) for the pz readout with per-sample `theta`. It is **opt-in**: `flash` remains the
+default and needs none of the machinery below.
+
+Prerequisites, in the shell that first runs it:
+
+| Requirement | Notes |
+|---|---|
+| NVIDIA GPU | the kernel is CUDA-only; there is no CPU fallback |
+| CUDA toolchain | `nvcc` on `PATH`, or `CUDA_HOME` set |
+| `ninja` | `pip install ninja` |
+| CUTLASS checkout | `git clone --depth 1 https://github.com/NVIDIA/cutlass` then `export CUTLASS_PATH="$PWD/cutlass"` (the loader appends `include/`) |
+| *(optional)* `TORCH_EXTENSIONS_DIR` | where to cache the build |
+
+The first run JIT-compiles the kernel — roughly **60 seconds** — and caches it; later runs load it
+almost instantly. The kernel implements **only the pz ansatz**; anything else raises rather than
+silently falling back, so you can never end up on a different numerical path without being told. If the
+toolchain is missing, importing the package still works and `flash`/`cutile` still train — only
+`--fast_solver cute` fails, with a message telling you what to install.
+
+### All four paths agree
+
+One epoch at the protocol above (seed 0), identical except for the solver flag. All four report the
+same **12,474** trainable parameters.
+
+| Run | Flags | Train loss | Val loss |
+|---|---|---|---|
+| default | `--fast_solver flash --streaming_fwp off` | 0.236043 ± 1e-6 | 0.075677 ± 2e-5 |
+| pure PyTorch | `--fast_solver cutile` | 0.236050 ± 1e-6 | 0.075594 ± 5e-5 |
+| streaming | `--streaming_fwp on` | 0.236045 | 0.075655 |
+| CuTe | `--fast_solver cute` | 0.236051 ± 2e-6 | 0.075581 ± 3e-5 |
+
+The four agree to **~3e-5 relative** on the training loss — fp32 accumulation-order drift between a
+fused Triton kernel, a pure-PyTorch scalar recurrence, a prefix-scan recurrence and a CuTe kernel, not a
+behavioural difference. Validation is the looser figure because it is measured *after* an epoch of
+training has folded the per-batch drift into the weights.
+
+Measured directly at the solver boundary (`B=8, in_dim=10, out_dim=20, reps=2`, CUDA fp32, `ansatz="pz"`,
+`fast_measure=True`) — maximum absolute deviation on the forward pass and on `∂L/∂θ`:
+
+| Pair | Forward | Backward (`∂θ`) |
+|---|---|---|
+| flash vs cutile | 3.0e-07 | 4.8e-07 |
+| flash vs CuTe | 1.5e-06 | 3.1e-06 |
+| cutile vs CuTe | 1.6e-06 | 3.2e-06 |
+
+> **These runs are not bitwise reproducible.** Repeating the *same* configuration moves the training
+> loss by ~1.4e-6 absolute (the Triton kernels are non-deterministic). Quote and compare these numbers
+> with a tolerance, never by exact string match: `cutile` and `cute` in particular sit almost exactly on
+> the 4-decimal rounding boundary (~0.236050), so their *displayed* value flips between `0.2360` and
+> `0.2361` between runs while the underlying value is unchanged.
+
 ## Outputs
 
 Each run creates a self-describing directory under
-`results/DATASET_sunspots/MODEL_qqkanfwp/HIDDEN_SIZE_48/.../SEED_<n>/RUN_<timestamp>/` containing the
+`results/DATASET_sunspots/MODEL_gqkan_qkanfwp/HIDDEN_SIZE_48/.../SEED_<n>/RUN_<timestamp>/` containing the
 resolved `args.json`, an environment snapshot (`python_info.txt`, `requirements.txt`,
 `environment.yaml`), `console_log.txt`, `train_log.csv`, `prediction_log.csv`,
-`qqkanfwp_final_metrics_summary.csv`, `best_model.pth`, and the figure set (loss curves, multistep
+`gqkan_qkanfwp_final_metrics_summary.csv`, `best_model.pth`, and the figure set (loss curves, multistep
 forecast snapshots, sunspot-cycle reconstruction, and the `fig13_data_*.csv` behind them).
 
 `results/` and `logs/` are gitignored.

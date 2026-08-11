@@ -17,7 +17,7 @@
 #
 # Modified copy of `qkan/solver.py` from https://github.com/Jim137/qkan
 #   Original work: Copyright (c) 2024, Jiun-Cheng Jiang (Apache-2.0).
-#   Modifications: Copyright 2026 Matthew Peng and contributors (Apache-2.0).
+#   Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen (Apache-2.0).
 #
 # Modifications relative to upstream:
 #   1. Batched `theta`: solvers accept a `theta` carrying a leading batch axis

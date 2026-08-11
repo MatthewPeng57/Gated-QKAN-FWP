@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 # is derived from https://github.com/MorvanZhou/pytorch-A3C (MIT License),
 # by Morvan Zhou.
 
-"""Train the QKAN-VQC fast-weight programmer policy on MiniGrid with A3C.
+"""Train the GQKAN-QFWP policy on MiniGrid with A3C.
 
 Runs asynchronous advantage actor-critic (Mnih et al., 2016) with one worker per
 available CPU core, over the seeds in ``RANDOM_SEEDS``. Per seed it writes the
@@ -42,7 +42,7 @@ from os.path import abspath, dirname, join
 
 import pickle
 
-from util.qkanv_utils import QuantumFWPNet as Net
+from util.gqkan_qfwp_utils import QuantumFWPNet as Net
 
 from MiniGridWrappers import ImgObsFlatWrapper
 import random
@@ -58,18 +58,23 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 UPDATE_GLOBAL_ITER = 5
 GAMMA = 0.9
-MAX_EP = 10000
+LR = 1e-4
+
+# Training length and seeds may be overridden from the environment so a short
+# run needs no source edit. The defaults reproduce the full training runs.
+MAX_EP = int(os.environ.get("QFWP_MAX_EP", 10000))
+RANDOM_SEEDS = [int(s) for s in os.environ.get("QFWP_SEEDS", "0,1,2,3,4").split(",")]
 
 
 ENV_NAME = 'MiniGrid-Empty-16x16-v0'
+MODEL_NAME = "GQKAN-QFWP"
 env = gym.make(ENV_NAME)
 env = ImgObsFlatWrapper(env)
 
 
-# ImgObsFlatWrapper flattens the 7x7x3 image observation, but leaves
-# observation_space describing the unflattened image, so the flat size is set
-# explicitly here rather than read off observation_space.shape.
-N_S = 147
+# ImgObsFlatWrapper declares the flattened image space, so this is the true
+# input size: 147 = 7 * 7 * 3.
+N_S = env.observation_space.shape[0]
 N_A = env.action_space.n
 
 print("OBSERVATION SPACE: ", N_S)
@@ -131,12 +136,8 @@ class Worker(mp.Process):
 
 
 if __name__ == "__main__":
-	MODEL_NAME = "QKANVFWP"
-
 	base_results_dir = join(dirname(abspath(__file__)), "results", ENV_NAME, MODEL_NAME)
 
-	RANDOM_SEEDS = [0,1,2,3,4]
-	LR = 1e-4
 	for random_seed in RANDOM_SEEDS:
 		print(f"\n===== Running with random_seed={random_seed} =====")
 

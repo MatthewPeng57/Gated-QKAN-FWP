@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #   2. seed every RNG and pin deterministic cuDNN behaviour,
 #   3. build the sunspot sliding-window datasets + loaders
 #      (`src.data.sunspot.make_datasets` -> `src.trainers.train_loading.make_loaders`),
-#   4. construct the `qqkanfwp` model (`src.models.QQKANFWP`),
+#   4. construct the GQKAN-QKANFWP model (`src.models.gqkan_qkanfwp`),
 #   5. snapshot args/environment into the run folder and hand off to
 #      `run_training`.
 #
@@ -46,8 +46,8 @@ from src.trainers.train_loading import make_loaders, run_training
 from src.trainers.utils import setup_logger
 
 # --- model: GQKAN-QKANFWP ---
-from src.models.QQKANFWP import FWP as QKAN_QKANFWP
-from src.models.QQKANFWP import FWPCell as QKAN_QKANFWPCell
+from src.models.gqkan_qkanfwp import FWP as GQKAN_QKANFWP
+from src.models.gqkan_qkanfwp import FWPCell as GQKAN_QKANFWPCell
 
 from src.utils.experiment import (
     save_args_json,
@@ -62,21 +62,21 @@ from src.utils.experiment import (
 def make_model(args):
     """Create a fresh model based on ``args.model``.
 
-    ``qqkanfwp`` (GQKAN-QKANFWP) is the only model shipped in this folder.
+    GQKAN-QKANFWP (CLI key ``gqkan_qkanfwp``) is the only model shipped here.
     """
-    if args.model == "qqkanfwp":
-        fwp_cell = QKAN_QKANFWPCell(
+    if args.model == "gqkan_qkanfwp":
+        fwp_cell = GQKAN_QKANFWPCell(
             args.input_size, args.hidden_size, args.output_size, args
         ).to(args.device).float()
         use_streaming = getattr(args, "streaming_fwp", "off") == "on"
-        model = QKAN_QKANFWP(
+        model = GQKAN_QKANFWP(
             fwp_cell, args.device,
             output_relu=getattr(args, "output_relu", False),
             use_streaming_fwp=use_streaming,
         ).to(args.device).float()
         return model
     else:
-        raise ValueError(f"Unknown model: {args.model!r} (only 'qqkanfwp' is available)")
+        raise ValueError(f"Unknown model: {args.model!r} (only 'gqkan_qkanfwp' is available)")
 
 
 def init_weights(m):
@@ -104,9 +104,9 @@ def main():
     parser.add_argument(
         "--model",
         type=str,
-        choices=["qqkanfwp"],
-        default="qqkanfwp",
-        help="Model to build (default: qqkanfwp).",
+        choices=["gqkan_qkanfwp"],
+        default="gqkan_qkanfwp",
+        help="Model to build (default: gqkan_qkanfwp).",
     )
 
     parser.add_argument("--device", type=str, choices=["cuda", "cpu"], default="cpu")
@@ -157,10 +157,13 @@ def main():
     parser.add_argument(
         "--fast_solver",
         type=str,
-        choices=["flash", "cutile"],
+        choices=["flash", "cutile", "cute"],
         default="flash",
-        help="Backend for the fast-programmer QKAN layer ('flash' Triton kernels "
-             "by default; 'cutile' pure-PyTorch scalar recurrence).",
+        help="Backend for the fast-programmer QKAN layer. 'flash' (default) uses "
+             "fused Triton kernels; 'cutile' is the pure-PyTorch scalar recurrence "
+             "and runs on CPU; 'cute' is an opt-in CUDA kernel that needs a CUDA "
+             "toolchain (nvcc, ninja, CUTLASS_PATH) and JIT-compiles on first use "
+             "(~60 s, cached afterwards).",
     )
     parser.add_argument(
         "--streaming_fwp",

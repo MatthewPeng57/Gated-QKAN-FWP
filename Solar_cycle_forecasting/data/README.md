@@ -19,8 +19,9 @@ Verify with:
 
 ```bash
 sha256sum Sunspots.csv
-# or run the data gate, which checks the hash, the split sizes and the tensor fingerprints:
-PYTHONPATH=. python ../tests/test_stage0_data_gate.py
+# or, from the Solar_cycle_forecasting/ directory, run the data gate — it checks
+# the hash, the split sizes and the tensor fingerprints:
+python tests/test_stage0_data_gate.py
 ```
 
 ## Terms of use

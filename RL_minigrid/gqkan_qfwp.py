@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Gated QKAN-VQC fast-weight programmer.
+"""GQKAN-QFWP: gated fast-weight programmer, QKAN slow path and VQC fast path.
 
 A QKAN-based slow programmer reads the observation and emits the rotation
 angles of a variational quantum circuit, so the circuit is reprogrammed at every

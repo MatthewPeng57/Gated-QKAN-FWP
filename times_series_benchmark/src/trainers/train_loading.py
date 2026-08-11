@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ def _extract_model_output(args, out):
 	Normalize model forward outputs into a tensor aligned with y.
 	This keeps your old per-model handling in one place.
 	"""
-	if args.model in ("qqkanfwp", "lqkanfwp", "qkanlfwp", "qkanvfwp"):
+	if args.model in ("gqkan_qkanfwp", "gqkanfwp", "gqkan_fwp", "gqkan_qfwp"):
 		return out[-1]
 	else:
 		raise ValueError(f"Model '{args.model}' is not a valid choice.")

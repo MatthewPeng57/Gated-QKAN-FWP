@@ -1,5 +1,12 @@
-Gated-QKANFWPs
-Copyright 2026 Matthew Peng and contributors
+Gated QKAN-FWP (Gated-QKANFWPs)
+Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
+
+This repository accompanies the paper "Gated QKAN-FWP: Scalable Quantum-inspired
+Sequence Learning" (arXiv:2605.06734).
+
+The training pipeline, experiment scaffolding, dataset generators and trainer
+utilities are adapted from a private research repository authored by
+Samuel Yen-Chi Chen, used with permission.
 
 This product includes software developed as part of the QKAN project
 (https://github.com/Jim137/qkan), Copyright (c) 2024, 2026 Jiun-Cheng Jiang,

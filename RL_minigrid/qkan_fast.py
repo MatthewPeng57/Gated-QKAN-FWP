@@ -19,8 +19,8 @@
 # https://github.com/Jim137/qkan, which is licensed under the Apache License,
 # Version 2.0 and is Copyright (c) 2024 Jiun-Cheng Jiang.
 #
-# Modifications are Copyright 2026 Matthew Peng and contributors, and are also
-# released under the Apache License, Version 2.0.
+# Modifications are Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
+# and are also released under the Apache License, Version 2.0.
 #
 # Summary of modifications:
 #   * `QKANLayer.forward`, `QKANLayer.forward_no_sum` and `QKAN.forward` were

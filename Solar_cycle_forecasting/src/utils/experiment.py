@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -41,7 +41,7 @@ def build_result_path(args, experiment_root: Path):
 
 	timestamp = datetime.now().strftime("%Y_%m_%d_%H%M%S_%f")
 	run_name = f"RUN_{timestamp}"
-	MODEL_EXTRA_PARAMS = {"qqkanfwp": []}
+	MODEL_EXTRA_PARAMS = {"gqkan_qkanfwp": []}
 
 	if args.model not in MODEL_EXTRA_PARAMS:
 		raise ValueError("args.model incompatible")

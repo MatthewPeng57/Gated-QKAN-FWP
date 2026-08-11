@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -27,7 +27,8 @@ QNN_DEPTH=2
 
 
 # --- Models to test ---
-MODELS=('qqkanfwp' 'lqkanfwp' 'qkanlfwp' 'qkanvfwp')
+# GQKAN-QKANFWP, GQKANFWP, GQKAN-FWP, GQKAN-QFWP
+MODELS=('gqkan_qkanfwp' 'gqkanfwp' 'gqkan_fwp' 'gqkan_qfwp')
 # HIDDEN_SIZE=(7 6 5 4 3 2)
 HIDDEN_SIZE=(8)
 SEQ_LEN=(64)

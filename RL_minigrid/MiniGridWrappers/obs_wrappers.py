@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@
 
 import gymnasium as gym
 import minigrid  # noqa: F401  -- registers the MiniGrid environment ids with gymnasium
+import numpy as np
 import torch
 
+from gymnasium import spaces
 from gymnasium.core import ObservationWrapper
 
 
@@ -42,22 +44,30 @@ class ImgObsFlatWrapper(ObservationWrapper):
         >>> obs, _ = env.reset()
         >>> obs.shape
         (147,)
-
-    Note:
-        ``observation_space`` is left describing the unflattened ``(7, 7, 3)``
-        image, so it does not match the flattened observation this wrapper
-        returns. Callers therefore set the input size explicitly (147) instead
-        of reading ``observation_space.shape``.
+        >>> env.observation_space.shape
+        (147,)
+        >>> env.observation_space.contains(obs)
+        True
     """
 
     def __init__(self, env):
         """A wrapper that makes image the only observation.
 
+        ``observation_space`` is rewritten to describe the flattened vector this
+        wrapper actually returns, so ``observation_space.shape[0]`` is the true
+        input size. The observation values themselves are unchanged.
+
         Args:
             env: The environment to apply the wrapper
         """
         super().__init__(env)
-        self.observation_space = env.observation_space.spaces["image"]
+        img_space = env.observation_space.spaces["image"]
+        self.observation_space = spaces.Box(
+            low=img_space.low.flatten(),
+            high=img_space.high.flatten(),
+            shape=(int(np.prod(img_space.shape)),),
+            dtype=img_space.dtype,
+        )
 
     def observation(self, obs):
         return obs["image"].flatten()

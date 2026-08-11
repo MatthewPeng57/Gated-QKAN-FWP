@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,12 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Gated linear-QKAN fast-weight programmer.
+"""GQKAN-QKANFWP: gated fast-weight programmer, QKAN slow path and QKAN fast path.
 
-A slow programmer network reads the observation and emits a low-rank update to
-the ``theta`` parameters of a QKAN layer. A sigmoid gate blends the new theta
-with the fast theta carried over from the previous step, so the QKAN layer is
-reprogrammed per timestep instead of being trained only by gradient descent.
+Both halves of the programmer are QKAN layers: the slow programmer that reads
+the observation is an upstream ``qkan.QKAN``, and the layer it reprograms is the
+vendored ``qkan_fast.QKAN``, which accepts per-call ``theta``. A sigmoid gate
+blends the newly generated theta with the fast theta carried over from the
+previous step.
 
 This variant generates ``theta`` only; the base weights are left untouched and
 passed through, and ``None`` is handed to the QKAN layer in their place.
@@ -26,7 +27,9 @@ passed through, and ``None`` is handed to the QKAN layer in their place.
 import torch
 import torch.nn as nn
 
-from qkan_fast import QKAN
+from qkan_fast import QKAN as fast_QKAN
+from qkan import QKAN
+
 from utils import set_init
 
 
@@ -35,10 +38,9 @@ class FWPCell(nn.Module):
 	def __init__(self, s_dim, latent_dim, qkan_s_dim):
 		super().__init__()
 
-		self.qkan_layer = QKAN(
+		self.qkan_layer = fast_QKAN(
 			width=[qkan_s_dim, qkan_s_dim],
 			reps=1,
-			ba_trainable=True,
 		)
 
 		layer = self.qkan_layer.layers[0]
@@ -50,7 +52,11 @@ class FWPCell(nn.Module):
 		self.base_num  = layer.base_weight.numel()
 
 		# slow programmer
-		self.encoder = nn.Linear(s_dim, latent_dim)
+		self.encoder = nn.Sequential(nn.Linear(s_dim,qkan_s_dim),  QKAN(
+                        width=[qkan_s_dim, qkan_s_dim],
+                        reps=1,
+                        ba_trainable=True,
+                    ), nn.Linear(qkan_s_dim,latent_dim))
 
 		# low-rank theta generator
 		self.theta_head_A = nn.Linear(latent_dim, self.theta_shape[0]*self.theta_shape[2])
@@ -59,10 +65,11 @@ class FWPCell(nn.Module):
 		# input preprocessing
 		self.classical_preprocessing = nn.Linear(s_dim, qkan_s_dim)
 
-		# fast weight decay gate
+		# fast weight decay gate; the positive bias starts the gate near 1 so the
+		# carried-over fast theta dominates early in training
 		self.fast_gate = nn.Linear(latent_dim,1)
-
-		set_init([self.theta_head_A,self.theta_head_B,self.classical_preprocessing, self.fast_gate,self.encoder])
+		self.fast_gate.bias.data.fill_(2.0)
+		set_init([self.theta_head_A,self.theta_head_B,self.classical_preprocessing, self.fast_gate])
 
 	def forward(self, x, fast_theta, fast_base):
 
@@ -101,7 +108,7 @@ class FWPCell(nn.Module):
 		res = self.classical_preprocessing(x)
 
 		# QKAN expects single weight set
-		theta = fast_theta.mean(0)
+		theta = fast_theta.squeeze(0)
 
 		res = self.qkan_layer(res, theta, None)
 

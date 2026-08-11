@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,18 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Actor-critic policy wrapper around the QKAN-QKAN fast-weight programmer.
+"""Actor-critic policy wrapper around the GQKAN-QFWP fast-weight programmer.
 
-Exposes ``QuantumFWPNet``, the network used by ``run_qqkanfwp.py``. The fast
-weights are carried between steps by the caller as ``(theta, base_weight)``.
+Exposes ``QuantumFWPNet``, the network used by ``run_gqkan_qfwp.py``. The fast
+weights are carried between steps by the caller as a single parameter tensor.
 """
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from gated_qkan_qkan_FWP import FWP
+from gqkan_qfwp import FWP
 
 
 class QuantumFWPNet(nn.Module):
@@ -35,23 +34,22 @@ class QuantumFWPNet(nn.Module):
 
 		self.latent_dim = 8
 
-		qkan_s_dim = int(np.ceil(np.log2(self.latent_dim)))
-		self.fwp    = FWP(s_dim = self.state_space, latent_dim = self.latent_dim, qkan_s_dim = qkan_s_dim)
+		self.fwp    = FWP(s_dim = self.state_space, latent_dim = self.latent_dim)
 
 		# Actor and critic heads
-		self.Linear2 = nn.Linear(qkan_s_dim, self.action_space)
-		self.Linear3 = nn.Linear(qkan_s_dim, 1)
+		self.Linear2 = nn.Linear(self.latent_dim, self.action_space)
+		self.Linear3 = nn.Linear(self.latent_dim, 1)
 
 		self.distribution = torch.distributions.Categorical
 
-	def forward_action(self, x, previous_theta_fast, previous_base_fast):
+	def forward_action(self, x, previous_circuit_param):
 		"""Single-step forward used while acting; carries the fast weights forward."""
-		out_batch, updated_theta_fast, updated_base_fast = self.fwp.fwp_cell(x, previous_theta_fast, previous_base_fast)
+		out_batch, updated_fast_params = self.fwp.fwp_cell(x, previous_circuit_param)
 
 		logits = self.Linear2(out_batch).squeeze(0)
 		values = self.Linear3(out_batch).squeeze(0)
 
-		return logits, values, updated_theta_fast, updated_base_fast
+		return logits, values, updated_fast_params
 
 	def forward_loss(self, x):
 		"""Whole-sequence forward used to build the update loss."""
@@ -65,15 +63,15 @@ class QuantumFWPNet(nn.Module):
 
 		return logits, values
 
-	def choose_action(self, s, previous_theta_fast, previous_base_fast):
+	def choose_action(self, s, previous_circuit_param):
 		self.eval()
 
-		logits, _, updated_theta_fast, updated_base_fast = self.forward_action(s, previous_theta_fast, previous_base_fast)
+		logits, _, updated_circuit_param = self.forward_action(s, previous_circuit_param)
 
 		prob = F.softmax(logits, dim = -1).data
 		m = self.distribution(prob)
 
-		return m.sample().numpy(), updated_theta_fast, updated_base_fast
+		return m.sample().numpy(), updated_circuit_param
 
 	def loss_func(self, s, a, v_t):
 		self.train()

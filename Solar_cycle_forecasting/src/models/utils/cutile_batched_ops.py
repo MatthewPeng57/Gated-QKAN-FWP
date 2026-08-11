@@ -18,7 +18,7 @@
 #
 # Original: https://github.com/Jim137/qkan (Apache-2.0),
 #           Copyright (c) Jiun-Cheng Jiang.
-# Modifications: Copyright 2026 Matthew Peng and contributors,
+# Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
 # Summary of changes made to the upstream file:

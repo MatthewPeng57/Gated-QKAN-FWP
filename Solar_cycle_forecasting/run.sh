@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,18 +29,18 @@ LR_SCHEDULE=keras_decay
 LOSS=peak_aware_mse
 
 sweep_start=$(date +%s)
-echo "Task A GQKAN-QKANFWP — 5 seeds on ${DATASET}"
+echo "GQKAN-QKANFWP — 5 seeds on ${DATASET}"
 echo "Config: H=${H} I=${I} O=${O} Q=${Q} LR=${LR} α=${ALPHA}"
 echo "Started: $(date)"
 
 pids=()
 for seed in "${SEEDS[@]}"; do
-    log="${LOG_DIR}/qqkanfwp_seed${seed}.log"
+    log="${LOG_DIR}/gqkan_qkanfwp_seed${seed}.log"
     python train.py \
         --epochs ${EPOCHS} --lr ${LR} \
         --lr_schedule ${LR_SCHEDULE} --loss ${LOSS} \
-        --model qqkanfwp --dataset ${DATASET} \
-        --exp_name "qqkanfwp_noRelu_seed${seed}" \
+        --model gqkan_qkanfwp --dataset ${DATASET} \
+        --exp_name "gqkan_qkanfwp_noRelu_seed${seed}" \
         --save_dir "${SAVE_DIR}" \
         --window_len 528 --horizon 132 \
         --input_size 1 --output_size 132 \

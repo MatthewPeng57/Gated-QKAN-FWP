@@ -1,4 +1,4 @@
-# Copyright 2026 Matthew Peng and contributors
+# Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -106,7 +106,7 @@ def predict_and_log(
             yhat = model(xb)
 
             # Model-specific output handling.
-            if args.model == "qqkanfwp":
+            if args.model == "gqkan_qkanfwp":
                 yhat = yhat[-1]
             else:
                 raise ValueError(f"Model '{args.model}' is not a valid choice.")
@@ -196,7 +196,7 @@ def plot_sampled_multistep_forecasts(
         yhat = model(xb)
 
         # 3. Model-specific output handling
-        if args.model == "qqkanfwp":
+        if args.model == "gqkan_qkanfwp":
             yhat = yhat[-1]
         else:
             raise ValueError(f"Model '{args.model}' is not a valid choice.")
@@ -275,7 +275,7 @@ def plot_sunspot_paper_style(
     with torch.no_grad():
         yhat = model(xb)
 
-        if args.model == "qqkanfwp":
+        if args.model == "gqkan_qkanfwp":
             yhat = yhat[-1]
         else:
             raise ValueError(f"Model '{args.model}' is not a valid choice.")
@@ -397,7 +397,7 @@ def generate_sunspot_reconstruction_figure_13_style(
         
         with torch.no_grad():
             out = model(input_tensor) # Extract multivariate, unwrap specific behavior applies...
-            if args.model == "qqkanfwp":
+            if args.model == "gqkan_qkanfwp":
                 out = out[-1]
             else:
                 raise ValueError(f"Model '{args.model}' is not a valid choice.")
@@ -429,7 +429,7 @@ def generate_sunspot_reconstruction_figure_13_style(
         final_horizon_simulated = model(final_future_input_tensor)
         
         # Unwrap specific behavioral output handling for final rolling simulation
-        if args.model == "qqkanfwp":
+        if args.model == "gqkan_qkanfwp":
             final_horizon_simulated = final_horizon_simulated[-1]
         else:
             raise ValueError(f"Model '{args.model}' is not a valid choice.")

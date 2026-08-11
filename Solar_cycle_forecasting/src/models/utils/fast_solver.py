@@ -17,7 +17,7 @@
 #
 # Original: https://github.com/Jim137/qkan (Apache-2.0),
 #           Copyright (c) Jiun-Cheng Jiang.
-# Modifications: Copyright 2026 Matthew Peng and contributors,
+# Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
 # Summary of changes made to the upstream file:
@@ -1088,6 +1088,21 @@ try:
 except Exception:  # cuda.tile not installed, or any other import error
     _CUTILE_BATCHED_AVAILABLE = False
 
+# CuTe batched-theta kernel (optional, opt-in via `--fast_solver cute`).
+# Importing it JIT-compiles nothing by itself, but it can still fail for many
+# reasons on a machine without a CUDA toolchain: RuntimeError when CUTLASS_PATH
+# is unset, OSError/CalledProcessError from a failed ninja build, ImportError
+# when torch's cpp_extension machinery is unusable. Catch Exception so that a
+# user without any of this can still import the module and train with `flash`.
+try:
+    from .cute_batched_ops import cute_pz_batched, cute_unavailable_reason
+
+    _CUTE_BATCHED_AVAILABLE = True
+except Exception:
+    cute_pz_batched = None
+    cute_unavailable_reason = None
+    _CUTE_BATCHED_AVAILABLE = False
+
 
 class _CuTileBatchedPZFunction(torch.autograd.Function):
     """Custom autograd function: cuTile batched-theta pz forward + backward."""
@@ -1554,4 +1569,133 @@ def cutile_batched_solver(
             in_dim=in_dim,
         )
 
+    return postacts.to(p_dtype)
+
+
+# ---------------------------------------------------------------------------
+# CuTe batched-theta kernel fast path (optional, opt-in)
+# ---------------------------------------------------------------------------
+
+_SUPPORTED_CUTE_ANSATZES = {"pz_encoding", "pz"}
+
+
+def cute_batched_solver(
+    x: torch.Tensor,
+    theta: torch.Tensor,
+    preacts_weight: torch.Tensor,
+    preacts_bias: torch.Tensor,
+    reps: int,
+    **kwargs,
+) -> torch.Tensor:
+    """
+    Batched-theta CuTe solver (JIT-compiled CUDA kernel).
+
+    Drop-in replacement for ``flash_exact_solver`` / ``cutile_batched_solver``:
+    same signature, same ``(batch, out_dim, in_dim)`` return shape.
+
+    Unlike those two, this backend implements **only the pz ansatz** and has no
+    fallback — anything else raises, so a silent switch to a different numerical
+    path can never happen behind your back. Use ``--fast_solver flash`` for the
+    other ansatzes.
+
+    Args
+    ----
+    x : (B, in_dim) float tensor
+    theta : (B, out_dim, in_dim, reps+1, 2), or (out_dim, in_dim, reps+1, 2)
+        which is broadcast to a batch of 1.
+    preacts_weight, preacts_bias : (out_dim, in_dim, reps) or broadcastable
+    reps : int
+
+    kwargs
+    ------
+    ansatz : must be "pz_encoding" or "pz".
+    preacts_trainable : bool (default False)
+    fast_measure : bool (default True)
+    out_dim : int (default x.shape[1])
+    dtype : accepted for signature compatibility; the kernel is fp32 internally
+        and the result is returned in ``x``'s dtype.
+
+    Returns
+    -------
+    postacts : (B, out_dim, in_dim) tensor, same dtype as x.
+    """
+    ansatz = kwargs.get("ansatz", "pz_encoding")
+    preacts_trainable = kwargs.get("preacts_trainable", False)
+    fast_measure = kwargs.get("fast_measure", True)
+    out_dim: int = kwargs.get("out_dim", x.shape[1])
+
+    if not _CUTE_BATCHED_AVAILABLE:
+        raise RuntimeError(
+            "The CuTe backend is not available: `from .cute_batched_ops import "
+            "cute_pz_batched` failed at import time. It needs an NVIDIA GPU, a CUDA "
+            "toolchain (nvcc on PATH or CUDA_HOME set), ninja, and CUTLASS_PATH "
+            "pointing at a CUTLASS checkout. Use --fast_solver flash instead."
+        )
+
+    if ansatz not in _SUPPORTED_CUTE_ANSATZES:
+        raise RuntimeError(
+            f"The CuTe backend implements only the pz ansatz, got ansatz={ansatz!r}. "
+            f"Supported: {sorted(_SUPPORTED_CUTE_ANSATZES)}. "
+            "Use --fast_solver flash for this ansatz."
+        )
+
+    if x.device.type != "cuda":
+        raise RuntimeError(
+            f"The CuTe backend is CUDA-only, got a tensor on device {x.device!r}. "
+            "Use --fast_solver flash (GPU) or --fast_solver cutile (CPU-capable)."
+        )
+
+    batch, in_dim = x.shape
+    p_dtype = x.dtype
+
+    # Normalize theta to a leading batch axis, mirroring cutile_batched_solver.
+    if theta.dim() == 4:
+        theta = theta.unsqueeze(0)
+    elif theta.dim() != 5:
+        raise ValueError(
+            f"theta must be 4D (out_dim, in_dim, reps+1, 2) or 5D with a leading "
+            f"batch axis, got shape {tuple(theta.shape)}"
+        )
+    if theta.shape[0] not in (1, batch):
+        raise ValueError(
+            f"Theta batch size {theta.shape[0]} must be 1 or match input batch {batch}"
+        )
+
+    # Broadcast out_dim / in_dim when theta was allocated on a smaller shape.
+    if theta.shape[2] != in_dim:
+        repeat_in = in_dim // theta.shape[2] + 1
+        repeat_out = out_dim if theta.shape[1] != out_dim else 1
+        theta = theta.repeat(1, repeat_out, repeat_in, 1, 1)[
+            :, :out_dim, :in_dim, :, :
+        ]
+    elif theta.shape[1] != out_dim:
+        repeat_out = out_dim // theta.shape[1] + 1
+        theta = theta.repeat(1, repeat_out, 1, 1, 1)[:, :out_dim, :, :, :]
+
+    # The kernel reads its own per-sample theta, so a batch-1 theta must be
+    # materialized across the batch rather than relied on to broadcast.
+    if theta.shape[0] == 1 and batch != 1:
+        theta = theta.expand(batch, -1, -1, -1, -1)
+
+    # Pre-flight the backend so a missing toolchain fails here, with a clear
+    # message, rather than from inside torch.autograd on the first apply().
+    reason = cute_unavailable_reason()
+    if reason is not None:
+        raise RuntimeError(
+            f"The CuTe backend is unavailable: {reason}\n"
+            "Use --fast_solver flash instead."
+        )
+
+    pw_arg = preacts_weight if preacts_trainable else None
+    pb_arg = preacts_bias if preacts_trainable else None
+
+    postacts = cute_pz_batched(
+        x,
+        theta,
+        pw_arg,
+        pb_arg,
+        reps=reps,
+        preacts_trainable=preacts_trainable,
+        fast_measure=fast_measure,
+    )
     return postacts.to(p_dtype)
