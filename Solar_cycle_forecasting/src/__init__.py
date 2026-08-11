@@ -12,8 +12,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Clean extraction of the executed sunspot benchmark pipeline.
-
-Extracted from the private GQKAN-QKANFWP research repository at commit
-``cde669b48d84b71f94946cc637cf24cafe0f5ce5``.
-"""
+"""Sunspot forecasting benchmark: data, model, trainer and utilities."""

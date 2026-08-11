@@ -7,9 +7,10 @@
 #   conda env create -f environment.yml
 #   conda activate gated-qkanfwps
 #
-# GPU is required only by parts of the code:
-#   - Solar_cycle_forecasting defaults to --device cuda and to the Triton "flash"
-#     solver. Pass --device cpu and --fast_solver cutile to run without a GPU.
+# GPU requirements differ per task:
+#   - Solar_cycle_forecasting REQUIRES an NVIDIA GPU. Its slow programmer is built
+#     with QKAN solver="cutile", which needs the `cuda-tile` package and runs
+#     CUDA-only, so there is no CPU path regardless of --device / --fast_solver.
 #   - times_series_benchmark and RL_minigrid run on CPU.
 #   - The optional block at the bottom is needed ONLY to REGENERATE the quantum
 #     dynamics CSVs in times_series_benchmark/cuda_q_data/ (make_cudaq_data.py).
@@ -33,8 +34,14 @@ dependencies:
 
       # --- quantum / KAN stack ---------------------------------------------
       - qkan==0.2.1                # Apache-2.0 - external QKAN package (J-C. Jiang)
+      - cuda-tile[tileiras]==1.2.0 # required by Solar_cycle_forecasting (solver="cutile").
+                                   #   NOT a transitive dependency of qkan. The [tileiras]
+                                   #   extra pulls the kernel compiler; without it the first
+                                   #   forward pass raises "'tileiras' compiler not found".
       - pennylane==0.43.1          # Apache-2.0
       - pennylane-lightning==0.43.0
+      - gast==0.7.0                # imported by pennylane.capture.autograph, not declared
+                                   #   by pennylane itself
       - triton==3.5.1              # MIT - fused flash kernels, GPU only
 
       # --- reinforcement learning (RL_minigrid) ----------------------------

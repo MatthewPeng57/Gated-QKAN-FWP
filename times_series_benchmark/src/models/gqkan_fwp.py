@@ -19,17 +19,6 @@ from qkan import QKAN
 
 torch.set_default_dtype(torch.float32)
 
-def set_init(modules):
-	if isinstance(modules, (list, tuple)):
-		for module in modules:
-			set_init(module)  # recurse
-	else:
-		for m in modules.modules():  # recursive
-			if isinstance(m, nn.Linear):
-				nn.init.normal_(m.weight, mean=0., std=0.1)
-				nn.init.constant_(m.bias, 0.)
-
-
 class FWPCell(nn.Module):
 	def __init__(self, input_size, hidden_size, output_size):
 		super().__init__()
@@ -64,7 +53,6 @@ class FWPCell(nn.Module):
 		# ---- Gating ----
 		self.fast_gate = nn.Linear(hidden_size, 1)
 		self.fast_gate.bias.data.fill_(2.0)
-		# set_init([self.to_l,self.to_q,self.input_pre, self.fast_gate,self.encoder,self.to_bias, self.output_post])
 
 	def forward(self, x, prev_weight, prev_bias):
 		"""
@@ -111,7 +99,11 @@ class FWPCell(nn.Module):
 		return out, W, b
 
 	def initial_fast_params(self, batch_size, device):
-		return torch.zeros(batch_size, self.output_size, self.in_size, device=device), torch.zeros(batch_size, self.output_size, device=device)
+		# Fast weight matches W from forward(): (B, out_size, in_size).
+		# Fast bias matches to_bias output: (B, output_size), a shared bias that
+		# broadcasts across the out_size rows.
+		return (torch.zeros(batch_size, self.out_size, self.in_size, device=device),
+				torch.zeros(batch_size, self.output_size, device=device))
 
 
 # ---- Sequence wrapper (unchanged logic, slightly cleaned) ----
@@ -136,5 +128,5 @@ class FWP(nn.Module):
             out, fast_weight, fast_bias = self.fwp_cell(x_t, fast_weight, fast_bias)
             outputs.append(out)
 
-        # (T, B, O) → match your original behavior
+        # (T, B, O)
         return torch.stack(outputs)

@@ -111,7 +111,7 @@ def make_datasets(args) -> DatasetBundle:
 		full_dataset = JaynesCummingsDataset(
 			seq_len=args.window_len,
 			num_steps=3000, # Large enough for training
-			decay=True      # Include noise for robustness
+			decay=True      # Include cavity dissipation
 		)
 
 		n_total = len(full_dataset)

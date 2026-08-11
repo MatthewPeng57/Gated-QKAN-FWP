@@ -14,7 +14,7 @@
 # limitations under the License.
 
 set -euo pipefail
-echo "Running all QKAN-FWP time-series benchmark experiments..."
+echo "Running all Gated QKAN-FWP time-series benchmark experiments..."
 
 # --- Common Arguments ---
 EPOCHS=100

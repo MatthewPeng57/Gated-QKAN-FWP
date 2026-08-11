@@ -28,11 +28,11 @@
 //   * the block-shared trig cache is dropped, since it assumed one shared
 //     theta per (out_dim, in_dim) block;
 //   * added the matching batched backward sweep.
-//
-// The original file's own derivation note is preserved verbatim below.
 // ---------------------------------------------------------------------------
 
-// Batched-theta pz_encoding FORWARD CuTe kernel (Phase 1).
+// Implementation note
+// -------------------
+// Batched-theta pz_encoding forward + backward CuTe kernels.
 //
 // Extends upstream qkan `cute_pz_fwd_kernel` (Jim137/qkan v0.2.2.post3, Apache-2.0)
 // to accept PER-SAMPLE theta `(B, out_dim, in_dim, reps+1, 2)` for the FWP
@@ -73,7 +73,8 @@ static int select_block_b(int /*n_oi*/, int batch) {
 }
 
 // ── Block-wide reduction → single atomicAdd (for grad_pw/grad_pb, shared across
-//    the batch axis). Ported from cute_kernels_upstream.cu. Only used on the
+//    the batch axis). Ported from Jim137/qkan v0.2.2.post3,
+//    qkan/csrc/cute_kernels.cu. Only used on the
 //    preacts_trainable path; grad_theta (per-sample) needs no reduction. ──
 __device__ __forceinline__ float warp_reduce_sum(float val) {
     #pragma unroll
@@ -108,7 +109,7 @@ __device__ __forceinline__ void block_reduce_atomic_add(
 // ── Reverse rotation operators (adjoint-state backward). For Rz and Ry the
 //    inverse gate (state reconstruction) and the transpose (adjoint transport)
 //    are the SAME map, so each helper serves both. Cross-checked against
-//    cute_kernels_upstream.cu cute_pz_bwd_kernel. ──
+//    Jim137/qkan v0.2.2.post3, qkan/csrc/cute_kernels.cu (cute_pz_bwd_kernel). ──
 // rev_rz: multiply alpha by (c + i·s), beta by (c - i·s).
 __device__ __forceinline__ void rev_rz(
     float c, float s, float& r0, float& i0, float& r1, float& i1)

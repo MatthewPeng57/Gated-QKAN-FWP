@@ -28,7 +28,7 @@ import cupy as cp
 def generate_jc_dynamics(num_steps=1000, t_max=50, decay=True):
     cudaq.set_target("dynamics")
     
-    # System: Qubit (2-level) and Cavity (let's use 5 levels for richness)
+    # System: qubit (2-level) and cavity, truncated at 5 Fock levels
     dimensions = {0: 2, 1: 5}
     
     # Operators

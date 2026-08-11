@@ -56,10 +56,9 @@ class FWPCell(nn.Module):
 		self.to_bias = nn.Linear(hidden_size, self.out_size)
 
 		# ---- Gating ----
-		# the positive bias starts the gate near 1 so the carried-over fast
-		# weights dominate early in training
+		# set_init zeroes the bias, so the gate starts at sigmoid(0) = 0.5 and
+		# weights the new and carried-over fast weights equally
 		self.fast_gate = nn.Linear(hidden_size, 1)
-		self.fast_gate.bias.data.fill_(2.0)
 		set_init([self.to_l,self.to_q,self.input_pre, self.fast_gate,self.slow_program_encoder,self.to_bias])
 
 	def forward(self, x, prev_weight, prev_bias):

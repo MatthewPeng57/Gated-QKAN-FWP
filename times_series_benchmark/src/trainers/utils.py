@@ -20,7 +20,6 @@ import os
 from typing import Optional
 from typing import Union
 
-import matplotlib.pyplot as plt
 import torch
 
 def log_epoch(epoch, train_loss, test_loss, path):
@@ -47,34 +46,16 @@ def setup_logger(path: str) -> logging.Logger:
 	return logger
 
 
-def plot_losses(train_losses, test_losses, epoch, save_path):
-	"""
-	Plot and save the train/test loss curves.
-	"""
-	plt.figure()
-	plt.plot(range(1, len(train_losses)+1), train_losses, label="Train Loss")
-	plt.plot(range(1, len(test_losses)+1), test_losses, label="Test Loss")
-	plt.xlabel("Epoch")
-	plt.ylabel("Loss")
-	plt.title("Training vs Test Loss")
-	plt.legend()
-	plt.savefig(save_path)
-	plt.close()
-
-
 def predict_and_log(
 	args,
 	model: torch.nn.Module,
 	loader: torch.utils.data.DataLoader,
-	train_len: int,
 	csv_path: Union[str, os.PathLike],
 	split: str = "simulation",
 	epoch: Optional[int] = None,
-	debug_plot: bool = True,
-	debug_path: Union[str, os.PathLike] = "debug_plot.png",
 ) -> None:
+	"""Run the model over `loader` and append every prediction to `csv_path`."""
 	model.eval()
-	all_ytrue, all_ypred = [], []
 
 	with torch.no_grad(), open(csv_path, "a", newline="") as f:
 		writer = csv.writer(f)
@@ -97,18 +78,3 @@ def predict_and_log(
 
 			for yt, yp in zip(ytrue_list, yhat_list):
 				writer.writerow([epoch, args.model, split, args.horizon, yt, yp])
-				all_ytrue.append(yt)
-				all_ypred.append(yp)
-
-	if debug_plot and all_ytrue:
-		plt.figure(figsize=(8, 4))
-		plt.plot(all_ytrue, label="Ground Truth", linewidth=1.2)
-		plt.plot(all_ypred, label="Prediction", linewidth=1.2)
-		plt.axvline(x=train_len, c="r", linestyle="--")
-		plt.title(f"[DEBUG] {args.model} {split} (epoch={epoch})")
-		plt.xlabel("timestep (index)")
-		plt.ylabel("value")
-		plt.legend()
-		plt.tight_layout()
-		plt.savefig(debug_path, dpi=200)
-		plt.close()

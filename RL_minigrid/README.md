@@ -43,8 +43,10 @@ cd RL_minigrid
 python run_gqkan_qkanfwp.py     # or run_gqkanfwp.py / run_gqkan_fwp.py / run_gqkan_qfwp.py
 ```
 
-Run from **this directory** — the runners resolve `util/` and their sibling modules relative to the
-working directory.
+The commands above assume this directory, but running by path from anywhere works too
+(`python path/to/RL_minigrid/run_gqkanfwp.py`): Python puts the *script's* directory on `sys.path`, so
+`util/` and the sibling modules resolve regardless of the working directory. Note that `results/` is
+written next to the runner, not in the current directory.
 
 **CPU only.** These models never move to GPU (the QKAN layers default to `device="cpu"`,
 `solver="exact"`). A3C spawns `min(cpu_count(), 80)` worker processes, so a machine with many cores
@@ -88,13 +90,17 @@ With the defaults, a full runner executes five sequential 10,000-episode trainin
 ```
 results/<ENV_NAME>/<MODEL_NAME>/seed_<N>/
 ├── config.json                 resolved hyperparameters (reflects any env overrides)
-├── seed_<N>.csv                per-episode reward
+├── seed_<N>.csv                episode, reward, avg100, std100
 ├── seed_<N>_raw_rewards.pkl    raw episode rewards
-├── seed_<N>_model.pth          trained global network
-└── seed_<N>_full.pdf           reward curve
+└── seed_<N>_model.pth          trained global network
 ```
 
 `results/` is gitignored.
+
+**This repository deliberately ships no figures and no plotting code.** Runs emit machine-readable
+artifacts only: `seed_<N>.csv` carries the per-episode reward alongside a 100-episode rolling mean and
+standard deviation (computed in `reward_stats.py`), and `seed_<N>_raw_rewards.pkl` carries the raw
+rewards. Plot them however you like.
 
 ## Known asymmetry in the A3C bootstrap
 

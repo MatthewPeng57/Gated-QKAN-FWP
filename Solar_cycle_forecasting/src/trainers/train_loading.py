@@ -36,14 +36,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from .utils import (
-    log_epoch,
-    plot_losses,
-    predict_and_log,
-    plot_sampled_multistep_forecasts,
-    plot_sunspot_paper_style,
-    generate_sunspot_reconstruction_figure_13_style,
-)
+from .utils import log_epoch, predict_and_log
 
 
 def count_effective_trainable(model):
@@ -89,7 +82,7 @@ def peak_aware_loss(y_pred, y_true, alpha=2.0):
 
 
 def plain_mse_loss(y_pred, y_true):
-    """Unweighted MSE — EFC 2023 §B.4 optimization target."""
+    """Plain unweighted mean squared error."""
     return torch.mean((y_pred - y_true) ** 2)
 
 @dataclass
@@ -126,7 +119,8 @@ def _extract_model_output(args, out):
 	Normalize model forward outputs into a tensor aligned with y.
 	"""
 	if args.model == "gqkan_qkanfwp":
-		# FWP returns a per-timestep stack; the last entry is the (B, H) forecast.
+		# FWP returns a (1, B, H) tensor — the horizon forecast under a leading
+		# singleton axis — so out[-1] selects the (B, H) forecast.
 		return out[-1]
 	else:
 		raise ValueError(f"Model '{args.model}' is not a valid choice.")
@@ -139,7 +133,6 @@ def run_training(
 	result_path: Union[str, os.PathLike],
 	logger,
 ) -> None:
-	# os.makedirs(result_path, exist_ok=True)
 	result_path.mkdir(parents=True, exist_ok=True)
 
 	# save args snapshot
@@ -155,24 +148,13 @@ def run_training(
 		criterion = lambda y_pred, y_true: peak_aware_loss(y_pred, y_true, alpha=args.alpha)
 	optimizer = optim.Adam(model.parameters(), lr=args.lr)
 
-	# LR schedule per --lr_schedule. Default `keras_decay` = per-step
-	# 1/(1 + 1e-6 * step), the schedule the published checkpoints were
-	# trained with. `efc_stepwise` = MultiStepLR with gamma=0.9 at epochs/3
-	# and 2*epochs/3 (EFC 2023 §B.2). The two paths differ in per-batch vs
-	# per-epoch `.step()` cadence; `scheduler_per_step` controls which.
-	_schedule = getattr(args, "lr_schedule", "keras_decay")
-	if _schedule == "efc_stepwise":
-		milestones = [max(1, args.epochs // 3), max(2, 2 * args.epochs // 3)]
-		scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.9)
-		scheduler_per_step = False  # step per epoch
-	else:  # keras_decay
-		decay_rate = 1e-6
-		keras_decay = lambda step: 1.0 / (1.0 + decay_rate * step)
-		scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=keras_decay)
-		scheduler_per_step = True  # step per batch
+	# LR schedule: `keras_decay`, the schedule the published checkpoints were
+	# trained with — the learning rate is multiplied by 1/(1 + 1e-6 * step)
+	# once per batch.
+	decay_rate = 1e-6
+	keras_decay = lambda step: 1.0 / (1.0 + decay_rate * step)
+	scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=keras_decay)
 
-	train_losses = []
-	test_losses = []
 	train_wall_start = time.time()
 
 	# Mean training-batch wall time. Wraps only the forward/backward/optimizer
@@ -208,9 +190,8 @@ def run_training(
 
 			optimizer.step()
 
-			# Keras-decay scheduler steps per-batch; EFC-stepwise steps per-epoch.
-			if scheduler_per_step:
-				scheduler.step()
+			# keras_decay advances once per batch.
+			scheduler.step()
 
 			sum_batch_time_s += time.perf_counter() - _batch_t0
 			total_batches += 1
@@ -222,11 +203,13 @@ def run_training(
 				logger.info("===== Parameter Summary =====")
 				logger.info(f"Total parameters: {total_param:,}")
 				logger.info(f"Trainable parameters: {trainable_param:,}")
+				# Per-parameter gradient census. Useful when checking which
+				# parameters are effectively trainable; too verbose for stdout.
 				for name, param in model.named_parameters():
 					if param.grad is None:
-						print(f"No grad: {name}")
+						logger.debug("No grad: %s", name)
 					else:
-						print(f"Gradients exist: {name}, norm={param.grad.norm()}")
+						logger.debug("Gradients exist: %s, norm=%s", name, param.grad.norm())
 		train_loss /= len(loaders.train_loader.dataset)
 
 		# ---- eval ----
@@ -252,39 +235,19 @@ def run_training(
 		logger.info("Epoch %d: train loss=%.8f, val loss=%.8f", epoch, train_loss, val_loss)
 		log_epoch(epoch, train_loss, val_loss, csv_path)
 
-		train_losses.append(train_loss)
-		test_losses.append(val_loss) # Leaving array name as test_losses so your plot_losses function doesn't break
-
-		# EFC-stepwise scheduler advances at the end of each epoch. Keras-decay
-		# already stepped per batch inside the training loop above.
-		if not scheduler_per_step:
-			scheduler.step()
-
-		# scheduler.step(test_loss)
-		# current_lr = optimizer.param_groups[0]['lr']
-
-		# print(f"Epoch {epoch:03d} | Train Loss: {train_loss:.4f} | Test Loss: {test_loss:.4f}")
-		# print(f"Epoch {epoch:03d} | LR: {current_lr:.6f} | Train Loss: {train_loss:.4f} | Test Loss: {val_loss:.4f}")
-
 		
 		
 		
-		if epoch in {1,15,30,50,100} and not getattr(args, "skip_plots", False):
-			prediction_plot_path = result_path / f"prediction_plot_epoch_{epoch}.png"
+		if epoch in {1,15,30,50,100}:
+			# Dump per-step predictions over the full series to prediction_log.csv.
 			predict_and_log(
 				args=args,
 				model=model,
 				loader=loaders.simulation_loader,
-				train_len=loaders.train_len,
 				csv_path=prediction_csv_path,
 				split="simulation",
 				epoch=epoch,
-				debug_path=prediction_plot_path,
 			)
-
-			# loss plot
-			loss_plot_path = result_path / f"loss_compare_plot_epoch_{epoch}.png"
-			plot_losses(train_losses, test_losses, epoch, save_path=loss_plot_path)
 
 			# checkpoint
 			model_path = result_path / f"saved_checkpoint_epoch_{epoch}.pth"
@@ -297,16 +260,6 @@ def run_training(
 				},
 				model_path,
 			)
-
-			if args.dataset == 'sunspots':
-				paper_plot_path = result_path / f"sunspot_paper_style_epoch_{epoch}.png"
-				plot_sunspot_paper_style(
-					args=args,
-					model=model,
-					loader=loaders.test_loader, 
-					debug_path=paper_plot_path,
-					num_samples=4 
-				)
 
 		# Best-validation checkpoint.
 		if val_loss < best_test_loss:
@@ -325,7 +278,6 @@ def run_training(
 	# FINAL EVALUATION (DENORMALIZED METRICS)
 	# ==========================================
 
-	# FIX 2: Point to the actual best_model.pth file
 	best_model_path = result_path / "best_model.pth"
 
 	# Load the best weights back into the model
@@ -340,58 +292,12 @@ def run_training(
 	logger.info("Starting final evaluation on test set (Denormalized)...")
 	model.eval()
 
-	# Unwrap the test dataset once so `base_dataset` is available to both the
-	# plotting block and the generic evaluation loop below.
+	# Unwrap the test dataset once so `base_dataset` is available to the
+	# evaluation loop below.
 	base_dataset = loaders.test_loader.dataset
 	if hasattr(base_dataset, 'dataset'):
 		base_dataset = base_dataset.dataset
 
-	# Generate a final plot for the BEST model
-	final_snapshot_plot_path = result_path / "multistep_snapshot_FINAL.png"
-	if args.dataset == 'sunspots' and not getattr(args, "skip_plots", False):
-				paper_plot_path = result_path / f"sunspot_paper_style_epoch_final_{epoch}.png"
-				plot_sunspot_paper_style(
-					args=args,
-					model=model,
-					loader=loaders.test_loader, 
-					debug_path=paper_plot_path,
-					num_samples=4 
-				)
-	logger.info("Starting final sunspot cycle reconstruction visualization...")
-
-	if args.dataset == 'sunspots' and not getattr(args, "skip_plots", False):
-		final_snapshot_plot_path = result_path / "multistep_snapshot_FINAL.png"
-		plot_sampled_multistep_forecasts(
-					args=args,
-					model=model,
-					loader=loaders.test_loader, 
-					csv_path=result_path / "multistep_snapshot_log.csv", # Append to the existing log
-					epoch=epoch, # Will log as the final epoch number
-					debug_path=final_snapshot_plot_path,
-					num_samples=5 # You can easily change this to 3, 5, or 10!
-				)
-
-		# Full-history reconstruction figure: needs the raw (unscaled) monthly
-		# sunspot series and its dates, read from the dataset's unscaled
-		# DataFrame. Column names follow the shipped SILSO monthly CSV.
-		full_df = loaders.simulation_loader.dataset.full_unscaled_df
-		history_dates_real = pd.to_datetime(base_dataset.full_unscaled_df['Date']).values
-		history_actual_real = full_df['Monthly Mean Total Sunspot Number'].values
-
-		final_reconstruction_path = result_path / "final_sunspot_cycle_reconstruction_Figure_13.png"
-		
-		
-		generate_sunspot_reconstruction_figure_13_style(
-			args=args,
-			model=model,
-			unscaled_target_series=history_actual_real,
-			dates_decimal=history_dates_real,
-			sunspot_dataset_instances=base_dataset,
-			debug_path=final_reconstruction_path,
-			epoch=epoch,
-			train_len=loaders.train_len
-		)
-	
 	# We will track both scaled and denormalized (real) predictions
 	all_true_real = []
 	all_pred_real = []

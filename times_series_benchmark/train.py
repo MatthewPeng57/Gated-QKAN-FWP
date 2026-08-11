@@ -18,7 +18,6 @@ import argparse
 
 import numpy as np
 import torch
-from torch import nn
 from src.datasets.registry import make_datasets
 from src.trainers.train_loading import make_loaders, run_training
 from src.trainers.utils import setup_logger
@@ -54,7 +53,7 @@ def make_model(args):
 	"""
 	if args.model == "gqkan_qfwp":            # GQKAN-QFWP
 		fwp_cell = GQKAN_QFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
-		model = GQKAN_QFWP(fwp_cell).to(args.device).float()
+		model = GQKAN_QFWP(fwp_cell, args.device).to(args.device).float()
 		return model
 	elif args.model == "gqkan_qkanfwp":       # GQKAN-QKANFWP
 		fwp_cell = GQKAN_QKANFWPCell(args.input_size, args.hidden_size, args.output_size, args.qnn_depth).to(args.device).float()
@@ -70,13 +69,6 @@ def make_model(args):
 		return model
 	else:
 		raise ValueError(f"Unknown model: {args.model}")
-
-def init_weights(m):
-    if isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight)
-        nn.init.zeros_(m.bias)
-
-
 
 def main():
 	parser = argparse.ArgumentParser(description="Time-series training entrypoint.")
@@ -103,11 +95,14 @@ def main():
 		help="Choose a dataset (default: bessel_j2)"
 	)
 
-	parser.add_argument("--save_dir", type=str, default="result_cudaq_extra", help="Directory where experiment outputs are stored")
-	parser.add_argument("--exp_name", type=str, default="experiment", help="Name of the experiment")
+	parser.add_argument("--save_dir", type=str, default="results", help="Directory where experiment outputs are stored")
+	parser.add_argument("--exp_name", type=str, default="experiment",
+		help="Experiment label. Recorded in args.json only; it does NOT appear in the output path")
 
 	parser.add_argument("--window_len", type=int, default=4, help="Length of sliding window")
-	parser.add_argument("--horizon", type=int, default=1, help="Predicting horizon")
+	parser.add_argument("--horizon", type=int, default=1,
+		help="Recorded in the 'horizon' column of prediction_log.csv only. The models always "
+			 "predict one step ahead, so setting this to anything but 1 mislabels the output")
 
 	parser.add_argument("--input_size", type=int, default=1, help="Input size (dimension)")
 	parser.add_argument("--hidden_size", type=int, default=5, help="Hidden state size of the FWP cell")
@@ -116,7 +111,8 @@ def main():
 
 	parser.add_argument("--batch_size", type=int, default=2, help="Batch size (large batch size may also need larger learning rate)")
 	parser.add_argument("--seed", type=int, default=42, help="random seed (default:42)")
-	parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+	parser.add_argument("--debug", action="store_true",
+		help="Accepted and recorded in args.json, but currently not read by any code path")
 
 	args = parser.parse_args()
 
@@ -150,9 +146,6 @@ def main():
 
 	# model
 	model = make_model(args)
- 
-	#initilize weights 
-	# model.apply(init_weights)
 
 	# train
 	run_training(args=args, model=model, loaders=loaders, result_path=result_path, logger=logger)

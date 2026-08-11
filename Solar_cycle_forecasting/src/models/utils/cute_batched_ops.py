@@ -101,23 +101,6 @@ def _mod():
     )
 
 
-def cute_pz_forward_batched(x, theta, pw=None, pb=None, reps=None,
-                            preacts_trainable=False, fast_measure=True):
-    """x: (B, in_dim); theta: (B, out_dim, in_dim, reps+1, 2). Returns (B, out_dim, in_dim)."""
-    x = x.to(torch.float32).contiguous()
-    theta = theta.to(torch.float32).contiguous()
-    dev = x.device
-    if pw is None:
-        pw = torch.zeros(1, device=dev, dtype=torch.float32)
-    if pb is None:
-        pb = torch.zeros(1, device=dev, dtype=torch.float32)
-    pw = pw.to(torch.float32).contiguous()
-    pb = pb.to(torch.float32).contiguous()
-    return _mod().pz_forward_batched(
-        x, theta, pw, pb, bool(preacts_trainable), bool(fast_measure)
-    )
-
-
 class _CuteBatchedPZ(torch.autograd.Function):
     """Autograd boundary over the batched pz CuTe fwd/bwd kernels.
 

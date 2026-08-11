@@ -30,7 +30,6 @@ Dispatch:
 from __future__ import annotations
 
 import os
-from typing import Callable
 
 import torch
 
@@ -129,33 +128,3 @@ class _StreamingFWPFunction(torch.autograd.Function):
             A, B, gates, grad_out, theta_ckpts
         )
         return grad_A, grad_B, grad_gates
-
-
-def streaming_fwp_per_step_outputs(
-    A: torch.Tensor,        # (B, L, O, R+1)
-    B: torch.Tensor,        # (B, L, I, 2)
-    gates: torch.Tensor,    # (B, L)
-    qkan_call: Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
-    x_resized_seq: torch.Tensor,  # (B, L, I)
-) -> torch.Tensor:
-    """Run the FWP recurrence and call qkan_call at every timestep.
-
-    Returns a (B, L, O) tensor of per-step QKAN outputs. Differentiable
-    end-to-end via torch autograd through the recurrence and the qkan_call.
-    Pure-torch path; a Triton-fused per-step kernel is deferred to a
-    follow-up task once profiling shows L>>16 wall-time matters.
-    """
-    Bsz, L, O, Rp1 = A.shape
-    _, _, I, two = B.shape
-    assert two == 2 and gates.shape == (Bsz, L)
-    assert x_resized_seq.shape == (Bsz, L, I), (
-        f"x_resized_seq shape {tuple(x_resized_seq.shape)} != ({Bsz}, {L}, {I})"
-    )
-    theta = torch.zeros(Bsz, O, I, Rp1, two, dtype=A.dtype, device=A.device)
-    outs = []
-    for t in range(L):
-        delta = torch.einsum("bol,bik->boilk", A[:, t], B[:, t])
-        g = gates[:, t].view(Bsz, 1, 1, 1, 1)
-        theta = (1 - g) * delta + g * theta
-        outs.append(qkan_call(x_resized_seq[:, t], theta))
-    return torch.stack(outs, dim=1)

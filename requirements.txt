@@ -15,8 +15,15 @@ tqdm==4.67.1
 
 # --- quantum / KAN stack ---
 qkan==0.2.1
+cuda-tile[tileiras]==1.2.0   # REQUIRED by Solar_cycle_forecasting: its slow programmer
+                             # uses QKAN solver="cutile", which imports cuda.tile and runs
+                             # CUDA-only. Not a transitive dep of qkan. The [tileiras] extra
+                             # pulls nvidia-cuda-tileiras, the kernel compiler — without it
+                             # you get "'tileiras' compiler not found" at the first forward.
 pennylane==0.43.1
 pennylane-lightning==0.43.0
+gast==0.7.0                  # imported by pennylane.capture.autograph but not declared
+                             # by pennylane; without it `import pennylane` fails.
 triton==3.5.1
 
 # --- reinforcement learning (RL_minigrid) ---

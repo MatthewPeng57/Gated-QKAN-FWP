@@ -10,12 +10,28 @@ parameters.**
 
 > Gated QKAN-FWP: Scalable Quantum-inspired Sequence Learning — [arXiv:2605.06734](https://arxiv.org/abs/2605.06734)
 
+## Requirements
+
+**An NVIDIA GPU is mandatory — there is no CPU path.** `--device cpu` does not work.
+
+The reason is not the `--fast_solver` choice: the **slow** programmer is constructed with
+`solver="cutile"` hardcoded at `src/models/gqkan_qkanfwp.py:70`, independently of `--device` and of
+`--fast_solver`. That solver dispatches into `cuda-tile`, which raises
+`ValueError: Input array is not on a CUDA device` on CPU tensors. `cuda-tile` is therefore a hard
+dependency of this task, not an optional accelerator.
+
+| | |
+|---|---|
+| GPU | NVIDIA, CUDA-capable |
+| Python deps | see the repository root `requirements.txt` / `environment.yml` (includes `cuda-tile`) |
+| Optional | a CUDA toolchain + CUTLASS, only for `--fast_solver cute` (see below) |
+
 ## Run
 
 ```bash
 cd Solar_cycle_forecasting
 bash run.sh                 # 5 seeds (0-4), 100 epochs, 3-way parallel
-EPOCHS=1 bash run.sh        # quick smoke
+EPOCHS=1 bash run.sh        # quick smoke (still needs a GPU)
 ```
 
 or a single run directly:
@@ -63,7 +79,7 @@ PYTHONPATH=. python tests/test_stage0_data_gate.py    # -> STAGE-0 DATA GATE: PA
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--fast_solver {flash,cutile,cute}` | `flash` | Backend for the fast QKAN layer. `flash` uses fused Triton kernels (GPU); `cutile` is the pure-PyTorch scalar recurrence and runs on CPU; `cute` is an opt-in JIT-compiled CUDA/CuTe kernel (see below). |
+| `--fast_solver {flash,cutile,cute}` | `flash` | Backend for the fast QKAN layer. `flash` uses fused Triton kernels (GPU); `cutile` uses the cuTile kernel in `cutile_batched_ops.py`, falling back to an equivalent pure-PyTorch scalar recurrence; `cute` is an opt-in JIT-compiled CUDA/CuTe kernel (see below). |
 | `--streaming_fwp {off,on}` | `off` | `on` replaces the materialise-and-cumsum block with a left-to-right prefix-scan recurrence that never materialises the `(B, L, O, I, R+1, 2)` delta tensor — same result, less memory. |
 
 The two `--streaming_fwp` paths compute the same quantity: `off` sums
@@ -71,7 +87,27 @@ The two `--streaming_fwp` paths compute the same quantity: `off` sums
 `θ_t = (1−g_t)·δ_t + g_t·θ_{t−1}`. Measured agreement at `L=528` in fp32 is ~1e-7 relative on both the
 forward pass and the gradients — pure floating-point accumulation drift.
 
-To run without a GPU: `--device cpu --fast_solver cutile`.
+### Other flags
+
+| Flag | Default | Effect |
+|---|---|---|
+| `--output_relu` | off | Apply a ReLU to the output head, clamping forecasts to be non-negative. **Off is the published setting** — the released numbers use an unclamped head. |
+| `--loss {peak_aware_mse,plain_mse}` | `peak_aware_mse` | `plain_mse` drops the `(1+α·y)` peak weighting, so `--alpha` stops having any effect. |
+| `--lr_schedule {keras_decay}` | `keras_decay` | Decays the learning rate per **batch** by `1/(1+1e-6·step)`. Only one schedule is shipped; the flag is kept so it stays recorded in `args.json`. |
+
+### Environment switches
+
+These are read directly from the environment and are **not** exposed as CLI flags. Both change the
+numerical path, so record them alongside any result you intend to compare.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `QFWP_CUTILE_KERNEL` | `1` | `0` forces `--fast_solver cutile` onto the pure-PyTorch scalar recurrence instead of the cuTile kernel. |
+| `QFWP_STREAMING_FWP` | `1` | `0` forces `--streaming_fwp on` onto the pure-PyTorch recurrence instead of the Triton prefix-scan kernel. |
+
+Both fall back to pure PyTorch automatically when CUDA or the relevant kernel package is unavailable,
+so an unset variable does not guarantee the kernel path was taken.
+
 
 ### The CuTe backend (opt-in)
 
@@ -103,14 +139,20 @@ same **12,474** trainable parameters.
 | Run | Flags | Train loss | Val loss |
 |---|---|---|---|
 | default | `--fast_solver flash --streaming_fwp off` | 0.236043 ± 1e-6 | 0.075677 ± 2e-5 |
-| pure PyTorch | `--fast_solver cutile` | 0.236050 ± 1e-6 | 0.075594 ± 5e-5 |
+| cuTile kernel | `--fast_solver cutile` | 0.236050 ± 1e-6 | 0.075594 ± 5e-5 |
 | streaming | `--streaming_fwp on` | 0.236045 | 0.075655 |
 | CuTe | `--fast_solver cute` | 0.236051 ± 2e-6 | 0.075581 ± 3e-5 |
 
-The four agree to **~3e-5 relative** on the training loss — fp32 accumulation-order drift between a
-fused Triton kernel, a pure-PyTorch scalar recurrence, a prefix-scan recurrence and a CuTe kernel, not a
-behavioural difference. Validation is the looser figure because it is measured *after* an epoch of
-training has folded the per-batch drift into the weights.
+The `cutile` row was measured at the default `QFWP_CUTILE_KERNEL=1`, i.e. through the cuTile kernel,
+not the pure-PyTorch fallback.
+
+The four agree to **~3e-5 relative** on the training loss — not a behavioural difference. Two effects
+contribute: fp32 accumulation order differs between a fused Triton kernel, a cuTile kernel, a
+prefix-scan recurrence and a CuTe kernel; and the CuTe kernel is additionally compiled with
+`--use_fast_math` and uses `__sincosf`, so its trigonometry is reduced-precision by construction.
+That is why the CuTe deviations below are ~5x the flash-vs-cuTile ones. Validation is the looser
+figure because it is measured *after* an epoch of training has folded the per-batch drift into the
+weights.
 
 Measured directly at the solver boundary (`B=8, in_dim=10, out_dim=20, reps=2`, CUDA fp32, `ansatz="pz"`,
 `fast_measure=True`) — maximum absolute deviation on the forward pass and on `∂L/∂θ`:
@@ -130,11 +172,24 @@ Measured directly at the solver boundary (`B=8, in_dim=10, out_dim=20, reps=2`, 
 ## Outputs
 
 Each run creates a self-describing directory under
-`results/DATASET_sunspots/MODEL_gqkan_qkanfwp/HIDDEN_SIZE_48/.../SEED_<n>/RUN_<timestamp>/` containing the
-resolved `args.json`, an environment snapshot (`python_info.txt`, `requirements.txt`,
-`environment.yaml`), `console_log.txt`, `train_log.csv`, `prediction_log.csv`,
-`gqkan_qkanfwp_final_metrics_summary.csv`, `best_model.pth`, and the figure set (loss curves, multistep
-forecast snapshots, sunspot-cycle reconstruction, and the `fig13_data_*.csv` behind them).
+`results/DATASET_sunspots/MODEL_gqkan_qkanfwp/HIDDEN_SIZE_48/.../SEED_<n>/RUN_<timestamp>/`:
+
+| File | Contents |
+|---|---|
+| `args.json` | the fully resolved configuration |
+| `python_info.txt`, `requirements.txt`, `environment.yaml`, `conda_*.txt` | environment snapshot |
+| `console_log.txt`, `log.txt` | run logs |
+| `train_log.csv` | per-epoch train and validation loss |
+| `prediction_log.csv` | denormalised one-step predictions over the full series |
+| `gqkan_qkanfwp_final_metrics_summary.csv` | final test metrics + parameter count |
+| `best_model.pth` | best-validation checkpoint |
+| `saved_checkpoint_epoch_<n>.pth` | periodic checkpoint (model + optimizer state) |
+| `README.md` | a self-describing summary of the run |
+
+**This repository deliberately ships no plotting code.** Runs emit CSVs and leave visualisation to
+you. Nothing writes a `.png`, and the `fig13_data_*.csv` files that earlier versions produced are
+gone with the figure routine that generated them — `train_log.csv` and `prediction_log.csv` carry
+the same underlying numbers.
 
 `results/` and `logs/` are gitignored.
 

@@ -37,8 +37,8 @@ class FWPCell(nn.Module):
   
 		layer = self.qkan_layer.layers[0]
 
-		self.theta_shape = layer.theta.shape      # (3,3,2,2)
-		self.base_shape  = layer.base_weight.shape # (3,3)
+		self.theta_shape = layer.theta.shape      # (out_dim, in_dim, reps+1, 2)
+		self.base_shape  = layer.base_weight.shape # (out_dim, in_dim)
 
 		self.theta_num = layer.theta.numel()
 		self.base_num  = layer.base_weight.numel()
@@ -84,38 +84,13 @@ class FWPCell(nn.Module):
 			B
 		)
 
-		# theta_new = torch.tanh(theta_new)
-		# -------- base weight generation --------
-
-		# base_new = self.base_head(res)
-		# base_new = base_new.view(batch,*self.base_shape)
-
-		# base_new = torch.tanh(base_new)
-
-		# -------- fast weight update --------
-
-		# gate = torch.sigmoid(self.fast_gate(latent))
-		# gate_expanded = gate.view(gate.shape[0], *([1] * (fast_theta.ndim - 1)))
-		# fast_theta = gate_expanded*fast_theta + theta_new
-		# gate_expanded = gate.view(gate.shape[0], *([1] * (fast_base.ndim - 1)))
-		# fast_base  = gate_expanded*fast_base  + base_new
-
 		gate = torch.sigmoid(self.fast_gate(res))
 		gate_expanded = gate.view(-1,1,1,1,1)
 		
 		theta = (1 - gate_expanded) * theta_new + gate_expanded * prev_theta
-		
-		# gate_expanded = gate.view(-1,1,1)
-		
-		
-		# base =  (1 - gate_expanded) * base_new  +  gate_expanded * fast_base
-		
+
 		x = self.input_pre(x)
-		
-# 		out = torch.stack(
-#     [self.qkan_layer(x[b].unsqueeze(0), theta[b], None) for b in range(batch)],
-#     dim=0
-# )
+
 		out = self.qkan_layer(x, theta, None)
 		out = self.output_post(out)
 
@@ -150,5 +125,5 @@ class FWP(nn.Module):
             out, fast_theta = self.fwp_cell(x_t, fast_theta)
             outputs.append(out)
 
-        # (T, B, O) → match your original behavior
+        # (T, B, O)
         return torch.stack(outputs)

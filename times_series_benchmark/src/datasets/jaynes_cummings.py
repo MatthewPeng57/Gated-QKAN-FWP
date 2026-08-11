@@ -54,7 +54,7 @@ class JaynesCummingsDataset(Dataset):
         return self.x.shape[0]
 
     def __getitem__(self, idx):
-        # Return [seq_len, 1] for the FWP/LSTM input
+        # Return [seq_len, 1]: a trailing feature axis
         return self.x[idx].unsqueeze(-1), self.y[idx]
     
     def inverse_transform(self, data_tensor: torch.Tensor):

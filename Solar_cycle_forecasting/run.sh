@@ -40,7 +40,7 @@ for seed in "${SEEDS[@]}"; do
         --epochs ${EPOCHS} --lr ${LR} \
         --lr_schedule ${LR_SCHEDULE} --loss ${LOSS} \
         --model gqkan_qkanfwp --dataset ${DATASET} \
-        --exp_name "gqkan_qkanfwp_noRelu_seed${seed}" \
+        --exp_name "gqkan_qkanfwp_seed${seed}" \
         --save_dir "${SAVE_DIR}" \
         --window_len 528 --horizon 132 \
         --input_size 1 --output_size 132 \
@@ -60,7 +60,7 @@ done
 for pid in "${pids[@]}"; do wait "${pid}" || echo "  !!! pid=${pid}"; done
 
 echo ""
-echo "TASK A GQKAN RERUN COMPLETE in $(( $(date +%s) - sweep_start ))s"
+echo "SWEEP COMPLETE in $(( $(date +%s) - sweep_start ))s"
 echo "  checkpoints: ${SAVE_DIR}/"
 echo "  logs:        ${LOG_DIR}/"
 echo "  finished:    $(date)"

@@ -20,16 +20,29 @@
 # Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
-# Summary of changes made to the upstream file:
-#   * per-sample batched ``theta`` carrying a leading batch axis
-#     ``(B, out_dim, in_dim, reps+1, 2)``, with ``forward`` / ``forward_no_sum``
-#     taking ``theta`` / ``base_weight`` as call arguments rather than reading
-#     them from module state — required because the GQKAN-QKANFWP fast
-#     programmer's ``theta`` is an input produced by the slow programmer;
-#   * ``qkan.solver`` imports replaced by the repo-local ``fast_solver``;
-#   * added a ``cutile`` batched-solver path;
-#   * optional hardware backends guarded so the main training paths import
-#     cleanly when those SDKs are absent.
+# Modifications relative to upstream ``qkan/solver.py``:
+#   1. Batched ``theta``: the solvers accept a ``theta`` carrying a leading
+#      batch axis (5-D: batch, out_dim, in_dim, reps+1, params), detected as
+#      ``is_batched_theta = len(theta.shape) == 5``. The einsum builders
+#      ``_build_real_expression``, ``_build_pz_expression`` and
+#      ``_build_rpz_expression`` take an ``is_batched_theta`` flag and emit
+#      subscripts with a leading batch index ("boi" instead of "oi");
+#      broadcasting repeats over out_dim/in_dim while leaving the batch, reps
+#      and parameter axes untouched, and a mismatched batch size raises
+#      ``ValueError``.
+#   2. Guarded optional backends: ``cuquantum.tensornet.contract_path``,
+#      ``opt_einsum.contract_path`` and the Triton kernels are imported inside
+#      try/except and gated behind ``_CUTN_AVAILABLE``, ``_OE_AVAILABLE`` and
+#      ``_FLASH_AVAILABLE``, so the module imports without cuQuantum,
+#      opt_einsum or Triton installed.
+#   3. Triton kernels are imported from the repo-local ``.fast_fused_ops``
+#      instead of ``qkan.fused_ops``.
+#   4. Added ``cutile_batched_solver`` and ``cute_batched_solver`` — two
+#      batched-theta backends with no upstream counterpart.
+#
+# The batched-theta support covers the **pz** path only. The ``qml`` solver call
+# sites in ``qkan_fast.py`` pass ``theta=th[i, j]`` — unbatched, and with the
+# (out_dim, in_dim) index order transposed — so that path is upstream behaviour.
 # ---------------------------------------------------------------------------
 
 """
@@ -413,108 +426,6 @@ def _find_contraction_path(expression, operands):
         path, _ = _oe_contract_path(expression, *operands)
         return path
     return None
-
-
-# def _build_real_expression(reps, preacts_trainable):
-#     """
-#     Build einsum expression for the real-ansatz circuit.
-#     Circuit: |0> -> H -> [XRyZ(theta) -> RY(x)]^reps -> measure
-#     Operands per rep: 2 (fused gate + data encoding). No final gate.
-#     """
-#     chain = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#     n_needed = 2 + 2 * reps
-#     if n_needed > 26:
-#         return None
-#     ci = 0
-#     q = chain[ci]
-#     ci += 1
-#     subs = [f"boi{q}"]
-#     q_new = chain[ci]
-#     ci += 1
-#     subs.append(f"{q_new}{q}")
-#     q = q_new
-#     for _ in range(reps):
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}oi")
-#         q = q_new
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}boi" if preacts_trainable else f"{q_new}{q}bi")
-#         q = q_new
-#     return ",".join(subs) + "->" + f"boi{q}"
-
-
-# def _build_pz_expression(reps, preacts_trainable):
-#     """
-#     Build einsum expression for the pz_encoding circuit.
-#     Circuit: |0> -> H -> [RzRy_fused(theta) -> RZ(x)]^reps -> RzRy_fused(theta_final) -> measure
-#     Operands per rep: 2 (fused gate + data encoding). +1 final gate.
-#     """
-#     chain = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#     n_needed = 3 + 2 * reps  # H(2) + reps*2 + final(1)
-#     if n_needed > 26:
-#         return None
-#     ci = 0
-#     q = chain[ci]
-#     ci += 1
-#     subs = [f"boi{q}"]
-#     q_new = chain[ci]
-#     ci += 1
-#     subs.append(f"{q_new}{q}")
-#     q = q_new
-#     for _ in range(reps):
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}oi")
-#         q = q_new
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}boi" if preacts_trainable else f"{q_new}{q}bi")
-#         q = q_new
-#     # Final RzRy gate
-#     q_new = chain[ci]
-#     ci += 1
-#     subs.append(f"{q_new}{q}oi")
-#     q = q_new
-#     return ",".join(subs) + "->" + f"boi{q}"
-
-
-# def _build_rpz_expression(reps):
-#     """
-#     Build einsum expression for the rpz_encoding circuit.
-#     Circuit: |0> -> H -> [RY(theta) -> RZ(encoded_x)]^reps -> RY(theta_final) -> measure
-#     rpz always uses encoded_x so data gates are (batch, out, in).
-#     Operands per rep: 2 (RY + RZ_data). +1 final RY.
-#     """
-#     chain = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-#     n_needed = 3 + 2 * reps
-#     if n_needed > 26:
-#         return None
-#     ci = 0
-#     q = chain[ci]
-#     ci += 1
-#     subs = [f"boi{q}"]
-#     q_new = chain[ci]
-#     ci += 1
-#     subs.append(f"{q_new}{q}")
-#     q = q_new
-#     for _ in range(reps):
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}oi")
-#         q = q_new
-#         q_new = chain[ci]
-#         ci += 1
-#         subs.append(f"{q_new}{q}boi")
-#         q = q_new
-#     # Final RY gate
-#     q_new = chain[ci]
-#     ci += 1
-#     subs.append(f"{q_new}{q}oi")
-#     q = q_new
-#     return ",".join(subs) + "->" + f"boi{q}"
-
 
 
 def _build_real_expression(reps, preacts_trainable, is_batched_theta):

@@ -16,10 +16,13 @@ circuit.
 
 | Model | `--model` key | Slow programmer | Fast programmer | Fast state emitted |
 |---|---|---|---|---|
-| **GQKAN-QKANFWP** | `gqkan_qkanfwp` | QKAN | QKAN | per-sample `theta`, `base_weight` |
-| **GQKANFWP** | `gqkanfwp` | Linear | QKAN | per-sample `theta`, `base_weight` |
+| **GQKAN-QKANFWP** | `gqkan_qkanfwp` | QKAN | QKAN | per-sample `theta` |
+| **GQKANFWP** | `gqkanfwp` | Linear | QKAN | per-sample `theta` |
 | **GQKAN-FWP** | `gqkan_fwp` | QKAN | Linear | `fast_weight`, `fast_bias` |
 | **GQKAN-QFWP** | `gqkan_qfwp` | QKAN | VQC (PennyLane) | variational circuit parameters |
+
+The two QKAN-fast models program only `theta`; the fast layer's `base_weight` stays the shared
+trained parameter and is not generated per sample.
 
 CLI keys are lowercase with underscores so they are shell-safe and unambiguous — note that the paper
 names **GQKANFWP** and **GQKAN-FWP** differ only by a hyphen but are different models.
@@ -55,10 +58,12 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**GPU.** `Solar_cycle_forecasting` defaults to `--device cuda` with the Triton "flash" solver; pass
-`--device cpu --fast_solver cutile` to run without one. `RL_minigrid` and `times_series_benchmark` run
-on CPU. NVIDIA CUDA-Q is **optional** — it is needed only to regenerate the quantum-dynamics CSVs, which
-ship in the repository.
+**GPU.** `Solar_cycle_forecasting` **requires an NVIDIA GPU.** Its slow programmer is built with QKAN
+`solver="cutile"`, which needs the `cuda-tile` package and runs CUDA-only, so there is no CPU path
+regardless of `--device` or `--fast_solver`. (`train.py` itself defaults to `--device cpu`, but
+`run.sh` — the intended entry point — passes `--device cuda`.) `RL_minigrid` and
+`times_series_benchmark` run on CPU and need no GPU at all. NVIDIA CUDA-Q is **optional** — needed only
+to regenerate the quantum-dynamics CSVs, which ship in the repository.
 
 ## Quickstart
 
@@ -74,8 +79,61 @@ cd times_series_benchmark && PYTHONPATH=. python train.py \
     --model gqkan_qkanfwp --dataset bessel_j2 --epochs 100
 ```
 
-Every run writes a self-describing output directory containing the resolved `args.json`, an
-environment snapshot, logs, metrics CSVs, figures, and the best checkpoint.
+Each task writes a self-describing output directory, but they differ in what they keep:
+
+- `Solar_cycle_forecasting` and `times_series_benchmark` record the resolved `args.json`, an
+  environment snapshot, logs, metrics CSVs and figures.
+- Only `Solar_cycle_forecasting` keeps a **best-validation** checkpoint. `times_series_benchmark`
+  snapshots at fixed epochs `{1, 15, 30, 50, 100}`, so a run with `--epochs 60` gets nothing after
+  epoch 50.
+- `RL_minigrid` writes `config.json`, a per-episode reward CSV, a reward-curve PDF and the **final**
+  (not best) network — no environment snapshot.
+
+## Solvers and how the sequence is processed
+
+Two things vary between the three tasks and are easy to conflate: **how the fast weights are
+accumulated over the sequence**, and **which QKAN solver evaluates the circuit**.
+
+### Sequence accumulation: prefix scan vs. sequential recurrence
+
+An FWP updates its fast weights at every timestep, `θ_t = (1−g_t)·δ_t + g_t·θ_{t−1}`. Whether that
+recurrence can be parallelised depends on whether the task needs the output at every step.
+
+| Task | Accumulation | Why |
+|---|---|---|
+| **Solar_cycle_forecasting** | **Parallel prefix scan.** One `einsum` builds every per-step update at once, then a `cumsum` over the gate log-decays collapses them straight to the final `θ_L`. No Python loop over the sequence. | The task is a *single-shot* 132-month forecast produced from the **final** fast weights only. Intermediate states are never read, so the recurrence collapses into a scan. |
+| **times_series_benchmark** | **Sequential.** `for t in range(seq_len)`, calling the FWP cell once per step and stacking the outputs. | An output is required at **every** timestep, so the fast weights must be materialised at each step. |
+| **RL_minigrid** | **Sequential.** `for t in range(T)`, same shape. | The policy and value heads are read at every timestep. |
+
+This applies to all four models within each task, and it is the dominant cost factor:
+
+- The prefix-scan path is parallel in time but materialises a `(B, L, O, I, R+1, 2)` tensor, so its
+  **memory** grows with sequence length. That is what `--streaming_fwp on` addresses (below).
+- The sequential path uses negligible extra memory but its **wall-clock grows linearly with the
+  sequence length**. This is why GQKAN-QFWP is much slower at `--window_len 64` than at `16`: its
+  variational circuit is evaluated once per timestep per sample.
+
+### Solver selection
+
+| Task | Flags | Default | What actually runs |
+|---|---|---|---|
+| **Solar_cycle_forecasting** | `--fast_solver {flash,cutile,cute}`<br>`--streaming_fwp {off,on}` | `flash`, `off` | Fused Triton kernels. See that folder's README for the four-way agreement table and the CuTe prerequisites. |
+| **times_series_benchmark** | *(none — not exposed)* | — | GQKAN-QKANFWP, GQKANFWP and GQKAN-FWP request `solver="cutn"`: a tensor-network contraction executed by `torch.einsum`, where the contraction **path** comes from cuQuantum if installed, else `opt-einsum`, else PyTorch's default. All three give the same result — only path quality differs — so this runs anywhere, with or without cuQuantum. |
+| **RL_minigrid** | *(none — not exposed)* | — | The QKAN default, `solver="exact"` on `device="cpu"` — an exact state-vector simulation. These models are small and CPU-only by design. |
+
+GQKAN-QFWP is the exception in both tables: its **fast** programmer is a PennyLane variational circuit
+(`qml.QNode` on `default.qubit`), not a QKAN, so no QKAN solver applies to it. Only its **slow**
+programmer is a QKAN, using the `exact` default.
+
+Only the solar task exposes solver switches, because it is the only one with a GPU-resident fast path
+worth swapping. The other two are CPU-bound and use a single fixed solver each.
+
+### `--streaming_fwp` (solar only)
+
+`off` (default) is the prefix scan described above. `on` replaces it with a left-to-right recurrence
+that never materialises the big delta tensor — trading the scan's parallelism for much lower memory.
+The two compute the same quantity: `off` sums `Σ_t (1−g_t)·δ_t·Π_{s>t} g_s`, `on` runs the equivalent
+recurrence. Measured agreement at `L=528` in fp32 is ~1e-7 relative, forward and backward.
 
 ## Does it actually learn? (pipeline sanity check)
 
@@ -93,7 +151,9 @@ can tell quickly whether your environment is working. Measured on an RTX 5090 / 
 | RL (`MiniGrid-Empty-16x16`) | GQKAN-QKANFWP | 600 episodes | mean reward | 0.065 → **0.599** |
 | | | | goal-reached rate | 16% → **86%** |
 
-¹ at `--window_len 16` to keep the check short; all other rows use the defaults.
+¹ at `--window_len 16` to keep the check short. The other times_series rows use the benchmark
+configuration from `run_all_dataset.sh` (not `train.py`'s lighter argparse defaults); the Solar row
+uses `run.sh`'s configuration.
 
 **GQKAN-QFWP is the slowest model** — its variational circuit is a PennyLane `default.qubit`
 state-vector simulation evaluated one sample at a time. Measured on 32 CPU cores: **~36 s/epoch** at

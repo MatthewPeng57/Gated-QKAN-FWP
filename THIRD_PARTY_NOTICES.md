@@ -64,9 +64,9 @@ These files were changed by the authors of this repository. The substantive modi
 2. **Solver rewiring.** `from qkan.solver import (...)` was replaced by `from .fast_solver import (...)`
    so the repo-local batched-theta solvers are used. The original import is retained as a comment at
    the substitution site.
-3. **Added `cutile` batched solver path** (`cutile_batched_solver`) and its registration in the
+3. **Added `cutile` batched solver path** *(`Solar_cycle_forecasting` only)* (`cutile_batched_solver`) and its registration in the
    accepted-solver lists.
-4. **Optional hardware-backend hooks** guarded by try/except (`qiskit`, `braket`/`cudaq`), inert when
+4. **Optional hardware-backend hooks** *(`Solar_cycle_forecasting` only)* guarded by try/except (`qiskit`, `braket`/`cudaq`), inert when
    the corresponding module is absent.
 
 Copyright in these modifications is held by the authors of this repository; the underlying work
@@ -177,9 +177,11 @@ ship no data files.
 | `numpy`, `pandas`, `scipy`, `scikit-learn` | BSD-3-Clause |
 | `matplotlib` | Matplotlib License (PSF-based) |
 | `qkan` | Apache-2.0 |
+| `cuda-tile` | NVIDIA terms |
 | `pennylane`, `pennylane-lightning` | Apache-2.0 |
 | `triton` | MIT |
 | `gymnasium`, `minigrid` | MIT |
+| `pygame` | LGPL-2.1 |
 | `tqdm` | MPL-2.0 / MIT |
 | `cudaq`, `cupy`, `cuquantum` *(optional)* | Apache-2.0 / MIT / NVIDIA terms |
 | `opt-einsum` *(optional)* | MIT |

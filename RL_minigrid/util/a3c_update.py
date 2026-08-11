@@ -54,9 +54,13 @@ def push_and_pull(opt, lnet, gnet, done, s_, fast_state, bs, ba, br, gamma):
         v_wrap(np.array(buffer_v_target)[:, None]).double())
 
     # calculate local gradients and push local parameters to global.
-    # set_to_none=False is required: torch > 2.0 defaults to True, and setting
-    # the grads to None kills the shared memory backing them, which breaks the
-    # multiprocessing hand-off below.
+    #
+    # set_to_none=False is required (torch >= 2.0 defaults to True). The push
+    # below does `gp._grad = lp.grad`, which makes the global and local gradient
+    # tensors the same object, so zeroing the global grads *in place* is what
+    # clears the local net's accumulation. With set_to_none=True that alias is
+    # dropped instead of zeroed, and lp.grad keeps accumulating across every
+    # update for the lifetime of the worker.
     opt.zero_grad(set_to_none=False)
     loss.backward()
     for lp, gp in zip(lnet.parameters(), gnet.parameters()):

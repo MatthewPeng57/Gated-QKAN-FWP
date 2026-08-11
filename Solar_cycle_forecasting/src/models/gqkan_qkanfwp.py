@@ -84,38 +84,10 @@ class FWPCell(nn.Module):
         self.fast_gate = torch.nn.Linear(hidden_size, 1)
         self.fast_gate.bias.data.fill_(2.0)
 
-    def forward(self, batch_item, fast_theta, fast_base):
-        batch = batch_item.shape[0]
-        res = self.slow_program_encoder(batch_item)
+    # NOTE: FWPCell owns the submodules only. The recurrence itself lives in
+    # FWP.forward, which runs the slow programmer over the whole window at
+    # once rather than stepping this cell per timestep.
 
-        # -------- theta generation --------
-        A = self.theta_head_A(res)
-        B = self.theta_head_B(res)
-
-        A = A.view(batch, self.theta_shape[0], self.theta_shape[2])
-        B = B.view(batch, self.theta_shape[1], self.theta_shape[3])
-
-        # outer product
-        theta_new = torch.einsum("bld,bqe->blqde", A, B)
-
-        # -------- fast weight update --------
-        gate = torch.sigmoid(self.fast_gate(res))
-        gate_expanded = gate.view(-1, 1, 1, 1, 1)
-        
-        theta = (1 - gate_expanded) * theta_new + gate_expanded * fast_theta
-        
-        batch_item = self.prelinear(batch_item)
-
-        # out shape is [Batch, out_resize]
-        out = self.qkan_layer(batch_item, theta, None)
-
-        # Returns the raw quantum hidden state; FWP owns the projection head.
-        return out, theta, fast_base
-
-    def initial_fast_params(self, batch_size, device):
-        theta = torch.zeros(batch_size, *self.theta_shape, device=device)
-        base  = torch.zeros(batch_size, *self.base_shape, device=device)
-        return theta, base
 
 ### FWP Module
 

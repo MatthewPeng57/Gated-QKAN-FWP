@@ -43,7 +43,8 @@ import torch
 from sklearn.preprocessing import MinMaxScaler
 from torch.utils.data import Dataset, Subset
 
-# Repo root = sunspot_qkan_benchmarks/ (this file is src/data/sunspot.py).
+# Repo root = the Solar_cycle_forecasting/ directory (this file is
+# src/data/sunspot.py, so two levels up).
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CSV = _REPO_ROOT / "data" / "Sunspots.csv"
 
@@ -62,7 +63,8 @@ class SunspotSequenceDataset(Dataset):
         dtype: Tensor dtype (default ``torch.float32``).
         smooth_window: Centered rolling-mean window applied *before* scaling.
             ``0`` (the default) keeps the series bit-identical to the trained
-            checkpoints. ``13`` reproduces the EFC 13-month running average.
+            checkpoints. A positive value smooths the series with a centered
+            rolling mean of that many months before scaling.
     """
 
     def __init__(
@@ -166,9 +168,11 @@ def make_sunspot_split(
 
 @dataclass
 class DatasetBundle:
-    """Bundle matching the source ``registry.DatasetBundle`` interface consumed
-    by ``train_loading.make_loaders`` / ``run_training`` (field names verbatim
-    from ``registry.py:35-41``)."""
+    """Datasets consumed by ``train_loading.make_loaders`` / ``run_training``.
+
+    ``simulation_ds`` is the full windowed dataset (used for the rolling
+    reconstruction figure); ``train_len`` is the number of training windows.
+    """
 
     train_ds: Dataset
     test_ds: Dataset

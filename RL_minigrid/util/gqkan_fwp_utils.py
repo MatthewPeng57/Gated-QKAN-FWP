@@ -26,7 +26,7 @@ from gqkan_fwp import FWP
 
 
 class QuantumFWPNet(nn.Module):
-	def __init__(self, s_dim, a_dim, rnn_as_reservoir=False):
+	def __init__(self, s_dim, a_dim):
 		super(QuantumFWPNet, self).__init__()
 
 		self.state_space = s_dim

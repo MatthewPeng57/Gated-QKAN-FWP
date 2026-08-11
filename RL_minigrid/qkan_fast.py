@@ -26,10 +26,18 @@
 #   * `QKANLayer.forward`, `QKANLayer.forward_no_sum` and `QKAN.forward` were
 #     extended to accept optional per-call `theta` and `base_weight` tensors.
 #     When supplied, these fast weights are used in place of the module's own
-#     shared `nn.Parameter`; when omitted, the original behaviour is preserved
-#     by falling back to `self.theta` / `self.base_weight`. This lets a
-#     fast-weight programmer reprogram the QKAN layer at every timestep instead
-#     of the layer holding a single set of gradient-trained parameters.
+#     shared `nn.Parameter`. This lets a fast-weight programmer reprogram the
+#     QKAN layer at every timestep instead of the layer holding a single set of
+#     gradient-trained parameters.
+#   * When they are omitted the original behaviour is preserved: `QKANLayer`
+#     falls back to its own `self.theta` / `self.base_weight`, and `QKAN.forward`
+#     passes `None` down so each layer performs that fallback itself (`QKAN`
+#     owns no such parameters of its own).
+#   * The package-relative imports `from .info import ...` and
+#     `from .solver import ...` were rewritten as absolute `qkan.info` /
+#     `qkan.solver`, because this copy is used as a standalone module outside
+#     the `qkan` package. The upstream `qkan` distribution therefore remains a
+#     runtime dependency of this file.
 # ---------------------------------------------------------------------------
 
 """
@@ -358,8 +366,8 @@ class QKANLayer(nn.Module):
 
     def forward(self, x: torch.Tensor, theta=None, base_weight=None):
         # use the supplied tensors
-        base_w = base_weight if base_weight is not None else self.base_weight  # replace with fast_weights
-        th = theta if theta is not None else self.theta  # replace with fast_weights
+        base_w = base_weight if base_weight is not None else self.base_weight
+        th = theta if theta is not None else self.theta
         assert x.shape[1] == self.in_dim, "Invalid input dimension"
 
         batch = x.shape[0]
@@ -367,7 +375,7 @@ class QKANLayer(nn.Module):
         if self.is_batchnorm:
             x = self.bn(x)
         base_output = torch.einsum(
-            "oi,bi->boi", base_w, self.base_activation(x)  # replace with fast_weights
+            "oi,bi->boi", base_w, self.base_activation(x)
         )
         if self.solver == "qml":
             postacts = torch.zeros(
@@ -385,7 +393,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "exact":
             postacts = torch_exact_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -405,7 +413,7 @@ class QKANLayer(nn.Module):
                 )
             postacts = flash_exact_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -420,7 +428,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "cutn" or self.solver == "tn":
             postacts = cutn_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -435,7 +443,7 @@ class QKANLayer(nn.Module):
         elif callable(self.solver):
             postacts = self.solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -473,7 +481,7 @@ class QKANLayer(nn.Module):
             self.c_dtype = torch.bfloat16
 
         if self.ba_trainable:
-            self.base_weight.data.fill_(0.5)           
+            self.base_weight.data.fill_(0.5)
         else:
             self.base_weight.data.zero_()
 
@@ -493,12 +501,12 @@ class QKANLayer(nn.Module):
     @torch.no_grad()
     def forward_no_sum(self, x: torch.Tensor, theta=None, base_weight=None,):
         # use the supplied tensors
-        base_w = base_weight if base_weight is not None else self.base_weight  # replace with fast_weights
-        th = theta if theta is not None else self.theta # replace with fast_weights
+        base_w = base_weight if base_weight is not None else self.base_weight
+        th = theta if theta is not None else self.theta
         assert x.shape[1] == self.in_dim, "Invalid input dimension"
 
         base_output = torch.einsum(
-            "oi,bi->boi", base_w, self.base_activation(x)  # replace with fast_weights
+            "oi,bi->boi", base_w, self.base_activation(x)
         )
 
         if self.solver == "qml":
@@ -508,7 +516,7 @@ class QKANLayer(nn.Module):
                         [
                             qml_solver(
                                 x=x[:, i],
-                                theta=th[i, j],  # replace with fast_weights
+                                theta=th[i, j],
                                 reps=self.reps,
                                 device=self.device,
                                 qml_device=self.qml_device,
@@ -525,7 +533,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "exact":
             postacts = torch_exact_solver(
                 x,
-                th,   # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -544,7 +552,7 @@ class QKANLayer(nn.Module):
                 )
             postacts = flash_exact_solver(
                 x,
-                th, # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -559,7 +567,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "cutn":
             postacts = cutn_solver(
                 x,
-                th, # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -883,9 +891,11 @@ class QKAN(nn.Module):
         return self._param_size
 
     def forward(self, x: torch.Tensor, theta=None, base_weight=None,):
+        # QKAN itself owns no theta/base_weight (only QKANLayer does); pass them
+        # straight through so each layer falls back to its own parameters when None
         base_w = base_weight
-        th = theta if theta is not None else self.theta  # replace with fast_weights
-        
+        th = theta
+
         shape_size = len(x.shape)
 
         if shape_size == 3:
@@ -916,9 +926,9 @@ class QKAN(nn.Module):
                 self.subnode_actscale.append(torch.std(x, dim=0).detach())
                 # Use the flattened batch size to match x after view(-1, T)
                 preacts = x[:, None, :].expand(B_flat, layer.out_dim, layer.in_dim)
-                postacts = layer.forward_no_sum(x, base_w, th)  # shape: (batch, out_dim, in_dim)   # replace with fast_weights
+                postacts = layer.forward_no_sum(x, th, base_w)  # shape: (batch, out_dim, in_dim)
 
-            x = layer(x,th,base_w)    # replace with fast_weights
+            x = layer(x,th,base_w)
 
             if self.save_act and isinstance(layer, QKANLayer):
                 input_range = torch.std(preacts, dim=0) + 0.1

@@ -21,16 +21,17 @@
 # Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
-# Summary of changes made to the upstream file:
-#   * per-sample batched ``theta`` carrying a leading batch axis
-#     ``(B, out_dim, in_dim, reps+1, 2)``, with ``forward`` / ``forward_no_sum``
-#     taking ``theta`` / ``base_weight`` as call arguments rather than reading
-#     them from module state — required because the GQKAN-QKANFWP fast
-#     programmer's ``theta`` is an input produced by the slow programmer;
-#   * ``qkan.solver`` imports replaced by the repo-local ``fast_solver``;
-#   * added a ``cutile`` batched-solver path;
-#   * optional hardware backends guarded so the main training paths import
-#     cleanly when those SDKs are absent.
+# Modifications relative to upstream ``qkan/cutile_ops.py``:
+#   1. Per-sample batched ``theta``: every ``ct.gather(theta, …)`` takes
+#      ``b_offs`` as its leading index, so each of the ``BLOCK_B`` lanes reads
+#      its own ``(out_dim, in_dim, reps+1, 2)`` slice. An unbatched theta is
+#      handled by ``expand()``-ing a stride-0 batch axis, so a single kernel
+#      serves both cases without a dedicated code path.
+#   2. ``grad_theta`` is written with a plain ``ct.scatter`` rather than an
+#      atomic add: with batched theta each program is the unique writer for its
+#      ``(b, o, i)`` slab, so no atomic is needed.
+#   3. Only the **pz** ansatz is implemented here; ``rpz`` and ``real`` fall
+#      back to the pure-PyTorch scalar recurrence in ``fast_solver.py``.
 # ---------------------------------------------------------------------------
 
 """

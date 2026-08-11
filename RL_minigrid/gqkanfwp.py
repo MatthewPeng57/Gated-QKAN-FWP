@@ -46,9 +46,6 @@ class FWPCell(nn.Module):
 		self.theta_shape = layer.theta.shape      # (3,3,2,2)
 		self.base_shape  = layer.base_weight.shape # (3,3)
 
-		self.theta_num = layer.theta.numel()
-		self.base_num  = layer.base_weight.numel()
-
 		# slow programmer
 		self.encoder = nn.Linear(s_dim, latent_dim)
 
@@ -100,7 +97,10 @@ class FWPCell(nn.Module):
 
 		res = self.classical_preprocessing(x)
 
-		# QKAN expects single weight set
+		# QKAN expects a single weight set, so the per-sample fast theta is
+		# reduced over the batch. Every call site here uses batch size 1 (one env
+		# step while acting, one sequence while computing the loss), so this mean
+		# is over a single element; it is not a general-batch reduction.
 		theta = fast_theta.mean(0)
 
 		res = self.qkan_layer(res, theta, None)

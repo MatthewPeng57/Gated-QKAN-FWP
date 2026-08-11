@@ -18,10 +18,8 @@
 
 """Observation wrapper that reduces MiniGrid observations to a flat image vector."""
 
-import gymnasium as gym
 import minigrid  # noqa: F401  -- registers the MiniGrid environment ids with gymnasium
 import numpy as np
-import torch
 
 from gymnasium import spaces
 from gymnasium.core import ObservationWrapper
@@ -72,25 +70,3 @@ class ImgObsFlatWrapper(ObservationWrapper):
     def observation(self, obs):
         return obs["image"].flatten()
 
-
-def main():
-	env = gym.make('MiniGrid-Empty-5x5-v0')
-	env = ImgObsFlatWrapper(env)
-	init_obs, _ = env.reset()
-	print(init_obs)
-	print(init_obs.shape)
-
-	obs = torch.from_numpy(init_obs).unsqueeze(0).unsqueeze(0)
-
-	print(obs)
-	print(obs.shape)
-
-
-	print("OBS SPACE: ", env.observation_space.shape)
-	print("ACT SPACE: ", env.action_space.n)
-
-	return
-
-
-if __name__ == '__main__':
-	main()

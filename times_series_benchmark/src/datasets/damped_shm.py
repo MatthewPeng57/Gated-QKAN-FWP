@@ -21,11 +21,9 @@
 import numpy as np
 from scipy.integrate import odeint
 import math
-import matplotlib.pyplot as plt
 
 import torch
-from torch.utils.data import Dataset, DataLoader
-from torch.autograd import Variable
+from torch.utils.data import Dataset
 
 from sklearn.preprocessing import MinMaxScaler
 
@@ -37,7 +35,6 @@ def system(theta,t,b,g,l,m):
 	dtheta_dt=[dtheta1_dt,dtheta2_dt]
 
 	return dtheta_dt
-
 
 
 b=0.15
@@ -55,62 +52,12 @@ t = np.linspace(0,20,240)
 theta = odeint(system,theta_0,t,args = (b,g,l,m))
 
 
-
-# f=1
-# for i in range(0,240):
-# 	filename = str(f)+'.png'
-# 	f= f+1
-# 	plt.figure()
-# 	plt.plot([10,l*math.sin(theta[i,0])+10],[10,10-l*math.cos(theta[i,0])],marker="o")
-# 	plt.xlim([0,20])
-# 	plt.ylim([0,20])
-
-	
-# 	plt.savefig(filename)
-	
-# Plotting	
-# plt.plot(t,theta[:,0],'b-')
-# plt.plot(t,theta[:,1],'r--')
-# plt.show()
-
 # normalize the dataset
 scaler = MinMaxScaler(feature_range=(-1, 1))
 dataset = scaler.fit_transform(theta[:,1].reshape(-1, 1))
 
 
-def plotting_test(x, data_src):
-	# create a figure window
-	fig = plt.figure(1, figsize=(9,8))
-	ax1 = fig.add_subplot()
-	ax1.plot(x,data_src)
-	ax1.axhline(color="grey", ls="--", zorder=-1)
-	ax1.set_ylim(-1,1)
-	ax1.text(0.5, 0.95,'Damped SHM', ha='center', va='top',
-		 transform = ax1.transAxes)
-
-	plt.show()
-
-def transform_data_single_predict(data, seq_length):
-	x = []
-	y = []
-
-	for i in range(len(data)-seq_length-1):
-		_x = data[i:(i+seq_length)]
-		_y = data[i+seq_length]
-		x.append(_x)
-		y.append(_y)
-	x_var = Variable(torch.from_numpy(np.array(x).reshape(-1, seq_length)).float())
-	y_var = Variable(torch.from_numpy(np.array(y)).float())
-
-	return x_var, y_var
-
-
-
-def get_damped_shm_data(data = dataset, seq_len = 4):
-	return transform_data_single_predict(data = data, seq_length = seq_len)
-
-
-# 2025 09 19: Dataset
+# PyTorch Dataset
 
 class DampedSHMSequenceDataset(Dataset):
 	"""
@@ -153,7 +100,7 @@ class DampedSHMSequenceDataset(Dataset):
 
 	def __getitem__(self, idx):
 		# return self.x[idx], self.y[idx]
-		return self.x[idx].unsqueeze(-1), self.y[idx] # unsqueeze(-1) for LSTM-like models
+		return self.x[idx].unsqueeze(-1), self.y[idx] # unsqueeze(-1) gives a trailing feature axis: (seq_len, 1)
 
 	def inverse_transform_y(self, y_tensor: torch.Tensor):
 		"""
@@ -166,47 +113,3 @@ class DampedSHMSequenceDataset(Dataset):
 		y_np = y_tensor.detach().cpu().numpy().reshape(-1, 1)
 		inv = self.scaler.inverse_transform(y_np).reshape(-1)
 		return torch.tensor(inv, dtype=y_tensor.dtype)
-
-
-def make_damped_shm_dataset(data_src=dataset,
-							seq_len=4,
-							batch_size=32,
-							shuffle=True,
-							pre_scaled=True,
-							feature_range=(-1, 1),
-							dtype=torch.float32):
-	"""
-	Factory: get both the Dataset and its DataLoader at once.
-	Uses the module-level `dataset` (already scaled) by default; pass
-	pre_scaled=False when supplying an unscaled series.
-	"""
-	ds = DampedSHMSequenceDataset(
-		data_src=data_src,
-		seq_len=seq_len,
-		pre_scaled=pre_scaled,
-		feature_range=feature_range,
-		dtype=dtype
-	)
-	dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
-	return ds, dl
-
-def main():
-	x, y = get_damped_shm_data()
-	plotting_test(t, dataset)
-
-	print(x.size())
-	print(y.size())
-
-	full_ds = DampedSHMSequenceDataset()
-
-	print(full_ds.x.size())
-	print(full_ds.y.size())
-
-	plotting_test(t[5:], full_ds.y)
-
-
-
-
-
-if __name__ == '__main__':
-	main()

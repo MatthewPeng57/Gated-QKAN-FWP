@@ -20,16 +20,26 @@
 # Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
-# Summary of changes made to the upstream file:
-#   * per-sample batched ``theta`` carrying a leading batch axis
-#     ``(B, out_dim, in_dim, reps+1, 2)``, with ``forward`` / ``forward_no_sum``
-#     taking ``theta`` / ``base_weight`` as call arguments rather than reading
-#     them from module state — required because the GQKAN-QKANFWP fast
-#     programmer's ``theta`` is an input produced by the slow programmer;
-#   * ``qkan.solver`` imports replaced by the repo-local ``fast_solver``;
-#   * added a ``cutile`` batched-solver path;
-#   * optional hardware backends guarded so the main training paths import
-#     cleanly when those SDKs are absent.
+# Modifications relative to upstream ``qkan/qkan.py``:
+#   1. Per-sample batched ``theta``: ``QKANLayer.forward`` and
+#      ``QKANLayer.forward_no_sum`` take ``theta`` and ``base_weight`` as call
+#      arguments instead of reading them from module state, and thread them
+#      through to every solver call site (``qml``, ``exact``, ``flash``,
+#      ``cutn``, ``cutile``, ``cute``, and the optional hardware backends).
+#      ``QKAN.forward`` likewise accepts and forwards them to each layer. This
+#      is required because the GQKAN-QKANFWP fast programmer's ``theta`` is an
+#      input produced by the slow programmer, not a shared trainable parameter;
+#      the module-owned ``theta`` parameter is left in place but is overridden
+#      on every call and therefore never receives a gradient.
+#   2. ``qkan.solver`` imports replaced by the repo-local ``.fast_solver``.
+#   3. Added ``cutile`` and ``cute`` batched-solver dispatch branches in both
+#      ``forward`` and ``forward_no_sum``.
+#   4. Optional hardware backends (qiskit, cudaq/Braket) guarded so the main
+#      training paths import cleanly when those SDKs are absent.
+#
+# The batched-theta support covers the **pz** path only. The ``qml`` solver call
+# sites in ``qkan_fast.py`` pass ``theta=th[i, j]`` — unbatched, and with the
+# (out_dim, in_dim) index order transposed — so that path is upstream behaviour.
 # ---------------------------------------------------------------------------
 
 """
@@ -393,8 +403,8 @@ class QKANLayer(nn.Module):
 
     def forward(self, x: torch.Tensor, theta=None, base_weight=None):
         # use the supplied tensors
-        base_w = base_weight if base_weight is not None else self.base_weight  # replace with fast_weights
-        th = theta if theta is not None else self.theta  # replace with fast_weights
+        base_w = base_weight if base_weight is not None else self.base_weight
+        th = theta if theta is not None else self.theta
         assert x.shape[1] == self.in_dim, "Invalid input dimension"
 
         batch = x.shape[0]
@@ -402,7 +412,7 @@ class QKANLayer(nn.Module):
         if self.is_batchnorm:
             x = self.bn(x)
         base_output = torch.einsum(
-            "oi,bi->boi", base_w, self.base_activation(x)  # replace with fast_weights
+            "oi,bi->boi", base_w, self.base_activation(x)
         )
         if self.solver == "qml":
             postacts = torch.zeros(
@@ -420,7 +430,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "exact":
             postacts = torch_exact_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -440,7 +450,7 @@ class QKANLayer(nn.Module):
                 )
             postacts = flash_exact_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -455,7 +465,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "cutn" or self.solver == "tn":
             postacts = cutn_solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -544,7 +554,7 @@ class QKANLayer(nn.Module):
         elif callable(self.solver):
             postacts = self.solver(
                 x,
-                th,  # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -602,12 +612,12 @@ class QKANLayer(nn.Module):
     @torch.no_grad()
     def forward_no_sum(self, x: torch.Tensor, theta=None, base_weight=None,):
         # use the supplied tensors
-        base_w = base_weight if base_weight is not None else self.base_weight  # replace with fast_weights
-        th = theta if theta is not None else self.theta # replace with fast_weights
+        base_w = base_weight if base_weight is not None else self.base_weight
+        th = theta if theta is not None else self.theta
         assert x.shape[1] == self.in_dim, "Invalid input dimension"
 
         base_output = torch.einsum(
-            "oi,bi->boi", base_w, self.base_activation(x)  # replace with fast_weights
+            "oi,bi->boi", base_w, self.base_activation(x)
         )
 
         if self.solver == "qml":
@@ -617,7 +627,7 @@ class QKANLayer(nn.Module):
                         [
                             qml_solver(
                                 x=x[:, i],
-                                theta=th[i, j],  # replace with fast_weights
+                                theta=th[i, j],
                                 reps=self.reps,
                                 device=self.device,
                                 qml_device=self.qml_device,
@@ -634,7 +644,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "exact":
             postacts = torch_exact_solver(
                 x,
-                th,   # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -653,7 +663,7 @@ class QKANLayer(nn.Module):
                 )
             postacts = flash_exact_solver(
                 x,
-                th, # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -668,7 +678,7 @@ class QKANLayer(nn.Module):
         elif self.solver == "cutn":
             postacts = cutn_solver(
                 x,
-                th, # replace with fast_weights
+                th,
                 self.preacts_weight,
                 self.preacts_bias,
                 self.reps,
@@ -1069,8 +1079,8 @@ class QKAN(nn.Module):
         return self._param_size
 
     def forward(self, x: torch.Tensor, theta=None, base_weight=None,):
-        base_w = base_weight  # replace with fast_weights
-        th = theta  # replace with fast_weights
+        base_w = base_weight
+        th = theta
         
         shape_size = len(x.shape)
 
@@ -1102,9 +1112,9 @@ class QKAN(nn.Module):
                 self.subnode_actscale.append(torch.std(x, dim=0).detach())
                 # Use the flattened batch size to match x after view(-1, T)
                 preacts = x[:, None, :].expand(B_flat, layer.out_dim, layer.in_dim)
-                postacts = layer.forward_no_sum(x, base_w, th)  # shape: (batch, out_dim, in_dim)   # replace with fast_weights
+                postacts = layer.forward_no_sum(x, th, base_w)  # shape: (batch, out_dim, in_dim)
 
-            x = layer(x,th,base_w)    # replace with fast_weights
+            x = layer(x,th,base_w)
 
             if self.save_act and isinstance(layer, QKANLayer):
                 input_range = torch.std(preacts, dim=0) + 0.1

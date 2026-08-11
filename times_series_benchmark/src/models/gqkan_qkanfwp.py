@@ -54,8 +54,8 @@ class FWPCell(nn.Module):
   
 		layer = self.qkan_layer.layers[0]
 
-		self.theta_shape = layer.theta.shape      # (3,3,2,2)
-		self.base_shape  = layer.base_weight.shape # (3,3)
+		self.theta_shape = layer.theta.shape      # (out_dim, in_dim, reps+1, 2)
+		self.base_shape  = layer.base_weight.shape # (out_dim, in_dim)
 
 		self.theta_num = layer.theta.numel()
 		self.base_num  = layer.base_weight.numel()

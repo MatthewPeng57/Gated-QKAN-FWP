@@ -20,16 +20,16 @@
 # Modifications: Copyright 2026 Kuo-Chung Peng and Samuel Yen-Chi Chen,
 #           licensed under the same Apache-2.0 terms.
 #
-# Summary of changes made to the upstream file:
-#   * per-sample batched ``theta`` carrying a leading batch axis
-#     ``(B, out_dim, in_dim, reps+1, 2)``, with ``forward`` / ``forward_no_sum``
-#     taking ``theta`` / ``base_weight`` as call arguments rather than reading
-#     them from module state — required because the GQKAN-QKANFWP fast
-#     programmer's ``theta`` is an input produced by the slow programmer;
-#   * ``qkan.solver`` imports replaced by the repo-local ``fast_solver``;
-#   * added a ``cutile`` batched-solver path;
-#   * optional hardware backends guarded so the main training paths import
-#     cleanly when those SDKs are absent.
+# Modifications relative to upstream ``qkan/fused_ops.py``:
+#   1. Per-sample batched ``theta`` on the **pz** kernels only.
+#      ``_pz_encoding_kernel`` and ``_pz_encoding_backward_kernel`` gained a
+#      ``stride_t_b`` batch stride and index their own theta slice via
+#      ``theta_ptr + b_offs * stride_t_b + …``, so each program instance reads
+#      the theta belonging to its batch lane. This is required because the
+#      GQKAN-QKANFWP fast programmer's ``theta`` is an input produced by the
+#      slow programmer, not a shared trainable parameter.
+#   2. The **rpz** and **real** kernels are UNCHANGED from upstream: they still
+#      expect a single unbatched ``theta`` shared across the batch.
 # ---------------------------------------------------------------------------
 
 """
@@ -214,7 +214,8 @@ def triton_pz_forward(
 
     Args:
         x: (batch, in_dim) float32 on CUDA
-        theta: (out_dim, in_dim, reps+1, 2) float32 on CUDA, already expanded
+        theta: (batch, out_dim, in_dim, reps+1, 2) float32 on CUDA, already
+            expanded — per-sample batched theta (see the NOTICE above)
         preacts_w: (out_dim, in_dim, reps) float32, or any tensor if not trainable
         preacts_b: (out_dim, in_dim, reps) float32, or any tensor if not trainable
         preacts_trainable: whether preacts are used
@@ -223,12 +224,10 @@ def triton_pz_forward(
     Returns:
         (batch, out_dim, in_dim) float32
     """
-    # batch, in_dim = x.shape
-    # out_dim = theta.shape[0]
-    # reps = theta.shape[2] - 1
+    # theta is (batch, out_dim, in_dim, reps+1, 2): axis 0 is the batch.
     batch, in_dim = x.shape
-    out_dim = theta.shape[1]  # <--- CORRECT: index 1 is Out_Dim
-    reps = theta.shape[3] - 1 # <--- CORRECT: index 3 is Reps+1
+    out_dim = theta.shape[1]
+    reps = theta.shape[3] - 1
 
     x = x.contiguous()
     theta = theta.contiguous()
@@ -1820,12 +1819,10 @@ def _pz_encoding_backward_kernel(
 
 def triton_pz_backward(x, theta, pw, pb, grad_output, preacts_trainable, fast_measure):
     """Launch pz_encoding backward kernel. Returns (grad_x, grad_theta, grad_pw, grad_pb)."""
-    # batch, in_dim = x.shape
-    # out_dim = theta.shape[0]
-    # reps = theta.shape[2] - 1
+    # theta is (batch, out_dim, in_dim, reps+1, 2): axis 0 is the batch.
     batch, in_dim = x.shape
-    out_dim = theta.shape[1]  # <--- CORRECT: index 1 is Out_Dim
-    reps = theta.shape[3] - 1 # <--- CORRECT: index 3 is Reps+1
+    out_dim = theta.shape[1]
+    reps = theta.shape[3] - 1
 
     x = x.contiguous()
     theta = theta.contiguous()

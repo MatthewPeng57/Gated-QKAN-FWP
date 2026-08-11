@@ -38,18 +38,20 @@ class FWPCell(nn.Module):
 	def __init__(self, s_dim, latent_dim, qkan_s_dim):
 		super().__init__()
 
+		# ba_trainable=False is deliberate and load-bearing for the reported
+		# parameter count: the base-weight path of the fast layer stays a frozen
+		# zero tensor, so this model is programmed through theta alone. (This is
+		# also the QKAN default; it is passed explicitly so it reads as a choice.)
 		self.qkan_layer = fast_QKAN(
 			width=[qkan_s_dim, qkan_s_dim],
 			reps=1,
+			ba_trainable=False,
 		)
 
 		layer = self.qkan_layer.layers[0]
 
 		self.theta_shape = layer.theta.shape      # (3,3,2,2)
 		self.base_shape  = layer.base_weight.shape # (3,3)
-
-		self.theta_num = layer.theta.numel()
-		self.base_num  = layer.base_weight.numel()
 
 		# slow programmer
 		self.encoder = nn.Sequential(nn.Linear(s_dim,qkan_s_dim),  QKAN(
@@ -65,10 +67,9 @@ class FWPCell(nn.Module):
 		# input preprocessing
 		self.classical_preprocessing = nn.Linear(s_dim, qkan_s_dim)
 
-		# fast weight decay gate; the positive bias starts the gate near 1 so the
-		# carried-over fast theta dominates early in training
+		# fast weight decay gate; set_init zeroes the bias, so the gate starts at
+		# sigmoid(0) = 0.5 and weights the new and carried-over theta equally
 		self.fast_gate = nn.Linear(latent_dim,1)
-		self.fast_gate.bias.data.fill_(2.0)
 		set_init([self.theta_head_A,self.theta_head_B,self.classical_preprocessing, self.fast_gate])
 
 	def forward(self, x, fast_theta, fast_base):
@@ -107,7 +108,10 @@ class FWPCell(nn.Module):
 
 		res = self.classical_preprocessing(x)
 
-		# QKAN expects single weight set
+		# QKAN expects a single weight set, so the per-sample fast theta is
+		# reduced over the batch. Every call site here uses batch size 1 (one env
+		# step while acting, one sequence while computing the loss), so this drops
+		# a size-1 dimension; it is not a general-batch reduction.
 		theta = fast_theta.squeeze(0)
 
 		res = self.qkan_layer(res, theta, None)

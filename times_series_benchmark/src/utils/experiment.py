@@ -40,25 +40,20 @@ def build_result_path(args, experiment_root: Path):
 	timestamp = datetime.now().strftime("%Y_%m_%d_%H%M%S_%f")
 	run_name = f"RUN_{timestamp}"
 
-	MODEL_EXTRA_PARAMS = {
-		"gqkan_qkanfwp": [],   # GQKAN-QKANFWP
-		"gqkanfwp": [],        # GQKANFWP
-		"gqkan_fwp": [],       # GQKAN-FWP
-		"gqkan_qfwp": [],      # GQKAN-QFWP
+	VALID_MODELS = {
+		"gqkan_qkanfwp",   # GQKAN-QKANFWP
+		"gqkanfwp",        # GQKANFWP
+		"gqkan_fwp",       # GQKAN-FWP
+		"gqkan_qfwp",      # GQKAN-QFWP
 	}
 
-	if args.model not in MODEL_EXTRA_PARAMS:
+	if args.model not in VALID_MODELS:
 		raise ValueError("args.model incompatible")
 
 	parts = [
 		f"DATASET_{args.dataset}",
 		f"MODEL_{args.model}",
 	]
-
-	# model-specific parameters
-	for prefix, attr in MODEL_EXTRA_PARAMS[args.model]:
-		value = getattr(args, attr)
-		parts.append(f"{prefix}_{value}")
 
 	# common parameters
 	parts += [

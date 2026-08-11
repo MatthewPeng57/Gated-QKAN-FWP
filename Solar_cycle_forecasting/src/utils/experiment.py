@@ -203,47 +203,51 @@ def generate_experiment_readme(args, result_path: Path) -> None:
 	args_dict = vars(args)
 
 	content = f"""
-	# Experiment Run
+# Experiment Run
 
-	## Basic Info
-	- Timestamp: {datetime.now().isoformat(timespec="seconds")}
-	- Dataset: {getattr(args, "dataset", "N/A")}
-	- Model: {getattr(args, "model", "N/A")}
-	- Seed: {getattr(args, "seed", "N/A")}
+## Basic Info
+- Timestamp: {datetime.now().isoformat(timespec="seconds")}
+- Dataset: {getattr(args, "dataset", "N/A")}
+- Model: {getattr(args, "model", "N/A")}
+- Seed: {getattr(args, "seed", "N/A")}
 
-	---
+---
 
-	## Command Used
+## Command Used
 
-		{command_line}
+```
+{command_line}
+```
 
-	---
+---
 
-	## Git Info
-	- Branch: {git_branch}
-	- Commit: {git_commit}
+## Git Info
+- Branch: {git_branch}
+- Commit: {git_commit}
 
-	---
+---
 
-	## Full Arguments
+## Full Arguments
 
-		{json.dumps(args_dict, indent=4)}
+```json
+{json.dumps(args_dict, indent=4)}
+```
 
-	---
+---
 
-	## System Info
-	- Python Version: {sys.version}
-	- Python Executable: {sys.executable}
-	- Platform: {platform.platform()}
+## System Info
+- Python Version: {sys.version}
+- Python Executable: {sys.executable}
+- Platform: {platform.platform()}
 
-	---
+---
 
-	## Notes
-	This folder is a self-contained experiment artifact.
-	To reproduce:
-	1. Checkout the git commit above.
-	2. Restore the environment.
-	3. Run the command listed above.
-	"""
+## Notes
+This folder is a self-contained experiment artifact.
+To reproduce:
+1. Check out the commit above.
+2. Restore the environment.
+3. Run the command listed above.
+"""
 
 	readme_path.write_text(content.strip() + "\n", encoding="utf-8")

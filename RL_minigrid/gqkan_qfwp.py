@@ -11,6 +11,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+#
+# The variational-circuit layer helpers (`H_layer`, `RY_layer`,
+# `entangling_layer`) follow the idiom of the PennyLane "Quantum transfer
+# learning" demo (https://pennylane.ai/qml/demos/tutorial_quantum_transfer_learning),
+# by Andrea Mari, Apache-2.0.
 
 """GQKAN-QFWP: gated fast-weight programmer, QKAN slow path and VQC fast path.
 
@@ -42,23 +47,11 @@ def H_layer(nqubits):
 	for idx in range(nqubits):
 		qml.Hadamard(wires=idx)
 
-def RX_layer(w):
-	"""Layer of parametrized qubit rotations around the y axis.
-	"""
-	for idx, element in enumerate(w):
-		qml.RX(element, wires=idx)
-
 def RY_layer(w):
 	"""Layer of parametrized qubit rotations around the y axis.
 	"""
 	for idx, element in enumerate(w):
 		qml.RY(element, wires=idx)
-
-def RZ_layer(w):
-	"""Layer of parametrized qubit rotations around the y axis.
-	"""
-	for idx, element in enumerate(w):
-		qml.RZ(element, wires=idx)
 
 
 def entangling_layer(nqubits):
@@ -71,11 +64,6 @@ def entangling_layer(nqubits):
 		qml.CNOT(wires=[i, i + 1])
 	for i in range(1, nqubits - 1, 2):  # Loop over odd indices:  i=1,3,...N-3
 		qml.CNOT(wires=[i, i + 1])
-
-
-def cycle_entangling_layer(nqubits):
-	for i in range(0, nqubits):
-		qml.CNOT(wires=[i, (i + 1) % nqubits])
 
 
 ##############
@@ -120,7 +108,7 @@ class BatchVQC:
 
 		res_all = []
 		for input_item, q_weight_item in zip(inputs, q_weights):
-			res = self.q_func(input_item, q_weight_item) # not yet consider the memory of previous time-step
+			res = self.q_func(input_item, q_weight_item)
 			res_all.append(torch.stack(res))  # stack so a tensor, not a list, is returned
 
 		return torch.stack(res_all)

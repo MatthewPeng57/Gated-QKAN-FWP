@@ -56,5 +56,5 @@ Thumbs.db
 
 # NOTE: data files are TRACKED on purpose and are small:
 #   Solar_cycle_forecasting/data/Sunspots.csv      (71 KB, SILSO, CC BY-NC 4.0)
-#   times_series_benchmark/cuda_q_data/*.csv       (239 KB, generated)
+#   times_series_benchmark/cuda_q_data/*.csv       (148 KB, generated)
 # See THIRD_PARTY_NOTICES.md section 8 for their licenses.

@@ -24,62 +24,17 @@
 #   2022-08-01  Added processing code to turn NARMA data into input and target.
 
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
-from torch.autograd import Variable
 from torch.utils.data import Dataset, DataLoader
 
 from sklearn.preprocessing import MinMaxScaler
-
-# Plotting function
-
-# create a figure window
-# fig = plt.figure(1, figsize=(9,8))
-
 
 # Load the original dataset
 # with open('input_sequence_NARMA.pickle','rb') as f:
 # 	input_sequence = pickle.load(f)
 # with open('target_sequence_NARMA.pickle','rb') as f:
 # 	target_sequence = pickle.load(f)
-
-def transform_data_single_predict(data_input, data_target, seq_length):
-	'''
-	data_input: time series
-	data_target: time series
-	'''
-	x = []
-	y = []
-
-	assert(len(data_input) == len(data_target))
-	data_len = len(data_input)
-	for i in range(data_len - seq_length-1):
-		_x = data_input[i:(i+seq_length)]
-		_y = data_target[i+seq_length]
-		x.append(_x)
-		y.append(_y)
-	x_var = Variable(torch.from_numpy(np.array(x).reshape(-1, seq_length)).float())
-	y_var = Variable(torch.from_numpy(np.array(y)).float())
-
-	return x_var, y_var
-
-
-
-
-def plotting_test(data_input, data_target, true_input, true_target):
-	ax1 = fig.add_subplot()
-	ax1.plot(data_input)
-	ax1.plot(data_target)
-	ax1.plot(true_input)
-	ax1.plot(true_target)
-
-	ax1.axhline(color="grey", ls="--", zorder=-1)
-	# ax1.set_ylim(-1,1)
-	ax1.text(0.5, 0.95,'NARMA', ha='center', va='top',
-		 transform = ax1.transAxes)
-
-	plt.show()
 
 
 def NARMA2_Generator(initial_y = 0, T = 300):
@@ -100,13 +55,15 @@ def NARMA2_Generator(initial_y = 0, T = 300):
 def NARMA_n_Generator(alpha = 0.3, beta = 0.05, gamma = 1.5, delta = 0.1, n_0 = 5, T = 300):
 	u = u_generator(alpha_bar = 2.11, beta_bar = 3.73, gamma_bar = 4.11, T = T)
 	y = []
-	y.append(0.196) # Need a y_0 (Need to find a correct initial values)
+	y.append(0.196) # y_0 seed value (see initial_y_for_narma2)
 
 
 	u_initial_values = [] # -1, -2, ... , -(n_0 - 1)
 	y_initial_values =[] # -1, -2, ... , -(n_0 - 1)
 	
-	# Set the initial values to be all zero. Do not know the actual values from the paper
+	# Design decision: the paper does not state the pre-sequence history, so both
+	# u and y are seeded with zeros for t < 0. This is deterministic and keeps every
+	# NARMA order comparable.
 	for i in range(1, n_0):
 		u_initial_values.append(0) # default initial values are zero
 		y_initial_values.append(0) # default initial values are zero
@@ -119,14 +76,14 @@ def NARMA_n_Generator(alpha = 0.3, beta = 0.05, gamma = 1.5, delta = 0.1, n_0 = 
 			if t - j >= 0:
 				y_res_temp += y[t - j]
 			else:
-				y_res_temp += y_initial_values[j - t - 1] # reserse the order, index from 0 of a list
+				y_res_temp += y_initial_values[j - t - 1] # reverse the order, index from 0 of a list
 
 		# Calculate the u[t - n_0]
 		u_res_temp = None
 		if t - n_0 + 1 >= 0:
 			u_res_temp = u[t - n_0 + 1]
 		else:
-			u_res_temp = u_initial_values[n_0 - t - 1 - 1] # reserse the order, index from 0 of a list
+			u_res_temp = u_initial_values[n_0 - t - 1 - 1] # reverse the order, index from 0 of a list
 
 		y_t_1 = alpha * y[t] + beta * y[t] * y_res_temp + gamma * u_res_temp * u[t] + delta
 		y.append(y_t_1)
@@ -151,23 +108,7 @@ def u_generator(alpha_bar = 2.11, beta_bar = 3.73, gamma_bar = 4.11, T = 300):
 	return np.array(res)
 
 
-def get_narma_data(n_0 = 5, seq_len = 4):
-	# scaled_dataset = generate_dataset(data)
-	if n_0 == 2:
-		input_sequence, target_sequence = NARMA2_Generator(initial_y = 0.196)
-	else:
-		input_sequence, target_sequence = NARMA_n_Generator(n_0 = n_0)
-
-
-	return transform_data_single_predict(
-		data_input = input_sequence, 
-		data_target = target_sequence, 
-		seq_length = seq_len)
-
-
-
-
-# 2025 09 19: PyTorch Dataset
+# PyTorch Dataset
 class NARMADataset(Dataset):
 	"""
 	Turn (input_sequence, target_sequence) into a seq_len -> next-step PyTorch Dataset.
@@ -218,7 +159,7 @@ class NARMADataset(Dataset):
 
 	def __getitem__(self, idx):
 		# return self.x[idx], self.y[idx]
-		return self.x[idx].unsqueeze(-1), self.y[idx] # unsqueeze(-1) for LSTM-like models
+		return self.x[idx].unsqueeze(-1), self.y[idx] # unsqueeze(-1) gives a trailing feature axis: (seq_len, 1)
 
 	# Helper to map y from the scaled domain back to the original scale
 	# (only meaningful when pre_scaled=False)
@@ -259,42 +200,3 @@ def make_narma_dataset(n_0: int = 5,
 	)
 	dl = DataLoader(ds, batch_size=batch_size, shuffle=shuffle)
 	return ds, dl
-
-
-def main():
-	
-	seq = u_generator()
-	u_2, seq_2 = NARMA2_Generator(initial_y = 0.196)
-	# plotting_test(data_input = seq, data_target = seq_2, true_input = input_sequence, true_target = target_sequence)
-
-	# print out the initial values
-	# print(seq[:10])
-	# print(seq_2[:10])
-	# print(target_sequence[:10])
-
-	u_3, seq_3 = NARMA_n_Generator(n_0 = 5)
-	u_4, seq_4 = NARMA_n_Generator(n_0 = 10)
-
-	# plotting_test(data_input = seq, data_target = seq_3, true_input = input_sequence, true_target = target_sequence)
-	# plotting_test(data_input = seq, data_target = seq_4, true_input = input_sequence, true_target = target_sequence)
-	print(len(seq))
-	print(len(seq_2))
-	print(len(seq_3))
-	print(len(seq_4))
-
-	ds, dl = make_narma_dataset()
-
-	print(ds.x.shape)
-	print(ds.y.shape)
-	print(ds.x)
-	print(ds.y)
-	x_var, y_var = get_narma_data(n_0=5, seq_len=4)
-	print(x_var)
-	print(y_var)
-	print(ds.x == x_var)
-	print(ds.y == y_var)
-
-	return
-
-if __name__ == '__main__':
-	main()

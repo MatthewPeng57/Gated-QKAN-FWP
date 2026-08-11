@@ -161,8 +161,10 @@ def streaming_fwp_forward_triton(
     Returns (final_theta, theta_ckpts):
       - final_theta: (B, O, I, R+1, 2)
       - theta_ckpts: (B, N_CKPTS, O, I, R+1, 2)  — segment θ checkpoints
-        used by the fused backward kernel. At L=528, SEG=16 this is ~9 MB
-        at B=32 (34 × 32 × 46 × 24 × 3 × 2 × 4 B).
+        used by the fused backward kernel. Its size is
+        B × N_CKPTS × O × I × (R+1) × 2 × 4 bytes; at this repository's
+        configuration (L=528, SEG=16 → N_CKPTS=34, B=32, O=20, I=10, R=2)
+        that is 32 × 34 × 20 × 10 × 3 × 2 × 4 B ≈ 5.2 MB.
     """
     assert A.is_cuda and B.is_cuda and gates.is_cuda, "kernel requires CUDA tensors"
     assert A.dtype == torch.float32 == B.dtype == gates.dtype, (
@@ -311,8 +313,9 @@ def _streaming_fwp_backward_kernel(
 
         # --- Pass 2: backward sweep through segment. Instead of issuing a
         # scalar atomic_add per timestep (which bottlenecks on atomic
-        # contention — grad_A has 24-way i-contention, grad_B has 46-way
-        # o-contention, grad_gates has 46*24=1104-way (o,i)-contention), we
+        # contention — grad_A has I-way i-contention, grad_B has O-way
+        # o-contention, and grad_gates has O*I-way (o,i)-contention; at this
+        # repository's O=20, I=10 that is 10-, 20- and 200-way), we
         # accumulate each per-step gradient into a 2D (SEG, K_PAD) tile or
         # 1D (SEG,) tile, then issue ONE vectorized atomic_add per tile at
         # the end of the segment. This reduces atomic_add calls by SEG×

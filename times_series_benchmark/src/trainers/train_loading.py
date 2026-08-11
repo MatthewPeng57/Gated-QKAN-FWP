@@ -26,7 +26,7 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 
-from .utils import log_epoch, plot_losses, predict_and_log
+from .utils import log_epoch, predict_and_log
 
 
 def count_effective_trainable(model):
@@ -154,23 +154,16 @@ def run_training(
 		train_losses.append(train_loss)
 		test_losses.append(test_loss)
 
-		# prediction plot/log
+		# prediction log + checkpoint
 		if epoch in {1,15,30,50,100}:
-			prediction_plot_path = result_path / f"prediction_plot_epoch_{epoch}.png"
 			predict_and_log(
 				args=args,
 				model=model,
 				loader=loaders.simulation_loader,
-				train_len=loaders.train_len,
 				csv_path=prediction_csv_path,
 				split="simulation",
 				epoch=epoch,
-				debug_path=prediction_plot_path,
 			)
-
-			# loss plot
-			loss_plot_path = result_path / f"loss_compare_plot_epoch_{epoch}.png"
-			plot_losses(train_losses, test_losses, epoch, save_path=loss_plot_path)
 
 			# checkpoint
 			model_path = result_path / f"saved_checkpoint_epoch_{epoch}.pth"

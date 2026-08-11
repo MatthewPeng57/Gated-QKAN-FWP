@@ -30,7 +30,7 @@ The A3C scaffolding follows Morvan Zhou's PyTorch A3C implementation
 import torch
 from utils import v_wrap, record
 from util.a3c_update import push_and_pull
-from plot_functions import full_plotting
+from reward_stats import rolling_reward_stats
 
 import torch.multiprocessing as mp
 from shared_adam import SharedAdam
@@ -52,9 +52,10 @@ import csv
 import json
 
 os.environ["OMP_NUM_THREADS"] = "1"
-# Setting OMP_NUM_THREADS from inside Python does not take effect on some Linux
-# systems. Export OMP_NUM_THREADS=1 before launching this script if the worker
-# processes still oversubscribe the CPU.
+# This assignment runs after `import torch`, by which point the OpenMP runtime
+# has already read OMP_NUM_THREADS, so it does not take effect here. Export
+# OMP_NUM_THREADS=1 before launching the script to actually stop the worker
+# processes from oversubscribing the CPU.
 
 UPDATE_GLOBAL_ITER = 5
 GAMMA = 0.9
@@ -99,7 +100,7 @@ class Worker(mp.Process):
 		self.name = 'w%02i' % name
 		self.g_ep, self.g_ep_r, self.res_queue = global_ep, global_ep_r, res_queue
 		self.gnet, self.opt = gnet, opt
-		self.lnet = Net(s_dim = N_S, a_dim = N_A, rnn_as_reservoir = False).double()           # local network
+		self.lnet = Net(s_dim = N_S, a_dim = N_A).double()           # local network
 
 		self.env = ImgObsFlatWrapper(gym.make(ENV_NAME))
 
@@ -120,7 +121,6 @@ class Worker(mp.Process):
 				buffer_r.append(r)
 
 				if total_step % UPDATE_GLOBAL_ITER == 0 or done:  # update global and assign to local net
-					# sync
 					# Bootstraps on `terminated`, not `done`: truncation is not treated as a
 					# terminal state here. The four runners deliberately differ on this and the
 					# asymmetry is preserved to stay consistent with the reported results.
@@ -159,7 +159,7 @@ if __name__ == "__main__":
 		csv_path = join(results_dir, f"seed_{random_seed}.csv")
 
 		set_global_seed(random_seed)
-		gnet = Net(s_dim = N_S, a_dim = N_A, rnn_as_reservoir = False).double()        # global network
+		gnet = Net(s_dim = N_S, a_dim = N_A).double()        # global network
 		count_parameters(gnet)
 		gnet.share_memory()         # share the global parameters in multiprocessing
 		opt = SharedAdam(gnet.parameters(), lr=LR, betas=(0.92, 0.999))      # global optimizer
@@ -168,7 +168,7 @@ if __name__ == "__main__":
 		# parallel training
 		workers = [Worker(gnet, opt, global_ep, global_ep_r, res_queue, i) for i in range(min(mp.cpu_count(),80))]
 		[w.start() for w in workers]
-		res = []                    # record episode reward to plot
+		res = []                    # per-episode reward, in completion order
 		while True:
 			r = res_queue.get()
 			if r is not None:
@@ -177,8 +177,8 @@ if __name__ == "__main__":
 				break
 		[w.join() for w in workers]
 
-		# Plot and save
-		na_raw, na_mu, na_sigma = full_plotting(_fileTitle=f"seed_{random_seed}", _trainingLength = len(res), _currentRewardList = res, save_dir=results_dir)
+		# Summarise and save
+		na_raw, na_mu, na_sigma = rolling_reward_stats(res)
 		with open(csv_path, "w", newline="") as f:
 			writer = csv.writer(f)
 			writer.writerow(["episode", "reward", "avg100", "std100"])

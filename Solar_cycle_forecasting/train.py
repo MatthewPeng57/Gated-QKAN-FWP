@@ -38,7 +38,6 @@ from pathlib import Path
 
 import numpy as np
 import torch
-from torch import nn
 
 # --- data ---
 from src.data.sunspot import make_datasets
@@ -77,12 +76,6 @@ def make_model(args):
         return model
     else:
         raise ValueError(f"Unknown model: {args.model!r} (only 'gqkan_qkanfwp' is available)")
-
-
-def init_weights(m):
-    if isinstance(m, nn.Linear):
-        nn.init.xavier_uniform_(m.weight)
-        nn.init.zeros_(m.bias)
 
 
 def main():
@@ -127,12 +120,10 @@ def main():
         help="Training loss function.",
     )
     parser.add_argument(
-        "--lr_schedule", type=str, choices=["keras_decay", "efc_stepwise"],
+        "--lr_schedule", type=str, choices=["keras_decay"],
         default="keras_decay",
-        help=(
-            "LR schedule. keras_decay: per-step 1/(1+1e-6*step) (default). "
-            "efc_stepwise: multiply by 0.9 at epochs//3 and 2*epochs//3."
-        ),
+        help="LR schedule. keras_decay decays the learning rate once per batch "
+             "by 1/(1 + 1e-6 * step).",
     )
 
     parser.add_argument("--save_dir", type=str, default="best_sup", help="Output root folder")
@@ -148,7 +139,6 @@ def main():
 
     parser.add_argument("--batch_size", type=int, default=2, help="Batch size")
     parser.add_argument("--seed", type=int, default=42, help="Random seed (default: 42)")
-    parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     parser.add_argument(
         "--output_relu", action="store_true",
         help="Apply a ReLU to the output head, clamping forecasts to be "
@@ -172,13 +162,6 @@ def main():
         default="off",
         help="Opt-in memory-saving streaming-FWP prefix-scan kernel. Default 'off' "
              "uses the legacy cumsum path (the paper-model path).",
-    )
-    parser.add_argument(
-        "--skip_plots", action="store_true",
-        help="Skip all post-training visualizations (per-epoch simulation plots and "
-             "final reconstruction figures). Metrics and best_model.pth are still "
-             "produced. Useful for multi-seed sweeps, where the figures cost "
-             "wall-time and are not needed per run.",
     )
 
     args = parser.parse_args()
